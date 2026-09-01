@@ -19,6 +19,63 @@ try {
   pythonCmd = 'python';
 }
 
+// Resilient yt-dlp execution engine (tries python3 -m yt_dlp first, then fallback to standalone yt-dlp binary)
+function runYtDlp(args, callback) {
+  let py;
+  try {
+    py = spawn(pythonCmd, ['-m', 'yt_dlp', ...args]);
+  } catch (e) {
+    try {
+      py = spawn('yt-dlp', args);
+    } catch (err) {
+      return callback(1, '', err.toString());
+    }
+  }
+
+  let stdoutData = '';
+  let stderrData = '';
+
+  py.stdout.on('data', d => stdoutData += d.toString());
+  py.stderr.on('data', d => stderrData += d.toString());
+
+  py.on('error', (err) => {
+    console.warn(`[yt-dlp] ${pythonCmd} failed, trying standalone yt-dlp binary...`);
+    try {
+      const fbPy = spawn('yt-dlp', args);
+      let fbStdout = '';
+      let fbStderr = '';
+      fbPy.stdout.on('data', d => fbStdout += d.toString());
+      fbPy.stderr.on('data', d => fbStderr += d.toString());
+      fbPy.on('close', code => callback(code, fbStdout, fbStderr));
+    } catch (e) {
+      callback(1, '', err.toString());
+    }
+  });
+
+  py.on('close', (code) => {
+    if ((code !== 0 || !stdoutData) && pythonCmd === 'python3') {
+      console.warn(`[yt-dlp] python3 -m yt_dlp returned code ${code}, trying fallback yt-dlp...`);
+      try {
+        const fbPy = spawn('yt-dlp', args);
+        let fbStdout = '';
+        let fbStderr = '';
+        fbPy.stdout.on('data', d => fbStdout += d.toString());
+        fbPy.stderr.on('data', d => fbStderr += d.toString());
+        fbPy.on('close', fbCode => {
+          if (fbCode === 0 && fbStdout) {
+            callback(0, fbStdout, fbStderr);
+          } else {
+            callback(code, stdoutData, stderrData);
+          }
+        });
+        fbPy.on('error', () => callback(code, stdoutData, stderrData));
+        return;
+      } catch (e) {}
+    }
+    callback(code, stdoutData, stderrData);
+  });
+}
+
 // Dynamic Sitemap.xml endpoint for Googlebot Indexer
 app.get('/sitemap.xml', (req, res) => {
   res.header('Content-Type', 'application/xml');
@@ -333,7 +390,7 @@ app.get('/api/payment-status', (req, res) => {
   res.json({ utr: cleanUtr, status: 'NOT_FOUND' });
 });
 
-// Extract Media Metadata API with Universal Platform Support & Smart URL Extractor
+// Extract Media Metadata API with Resilient runYtDlp Engine
 app.get('/api/info', async (req, res) => {
   const { url } = req.query;
 
@@ -356,61 +413,45 @@ app.get('/api/info', async (req, res) => {
 
   console.log(`[API /info] Extracting metadata using [${pythonCmd}] for [${platform.name}]: ${cleanUrl}`);
 
-  try {
-    const py = spawn(pythonCmd, ['-m', 'yt_dlp', '--dump-single-json', '--ignore-no-formats-error', '--no-warnings', '--no-playlist', cleanUrl]);
-    let stdoutData = '';
-    let stderrData = '';
+  runYtDlp(['--dump-single-json', '--ignore-no-formats-error', '--no-warnings', '--no-playlist', cleanUrl], (code, stdoutData, stderrData) => {
+    if (code !== 0 || !stdoutData) {
+      console.error('yt-dlp stderr:', stderrData);
+      return res.status(400).json({ error: '⚠️ Could not read video link. Please check the URL and try again.' });
+    }
 
-    py.stdout.on('data', (data) => {
-      stdoutData += data.toString();
-    });
+    try {
+      const info = JSON.parse(stdoutData);
 
-    py.stderr.on('data', (data) => {
-      stderrData += data.toString();
-    });
+      const response = {
+        title: info.title || 'Social Media Video',
+        uploader: info.uploader || info.channel || info.artist || `${platform.name} Author`,
+        duration: formatDuration(info.duration),
+        duration_seconds: info.duration || 0,
+        thumbnail: info.thumbnail || (info.thumbnails && info.thumbnails.length > 0 ? info.thumbnails[info.thumbnails.length - 1].url : 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=800&q=80'),
+        platform,
+        url: cleanUrl,
+        views: info.view_count ? info.view_count.toLocaleString() : 'N/A',
+        formats: {
+          audio: [
+            { label: 'MP3 Ultra HD (320 kbps)', bitrate: '320k', size: '~8.5 MB', format_id: 'mp3-320' },
+            { label: 'MP3 High Quality (256 kbps)', bitrate: '256k', size: '~6.2 MB', format_id: 'mp3-256' },
+            { label: 'MP3 Standard (128 kbps)', bitrate: '128k', size: '~3.4 MB', format_id: 'mp3-128' },
+            { label: 'M4A Original Stream', bitrate: 'm4a', size: '~5.1 MB', format_id: 'm4a' }
+          ],
+          video: [
+            { label: 'MP4 4K Ultra HD (HDR Color Grade + Crisp Edge)', res: '2160p', size: '~120 MB', format_id: 'mp4-4k' },
+            { label: 'MP4 Full HD (1080p + Audio)', res: '1080p', size: '~45 MB', format_id: 'mp4-1080' },
+            { label: 'MP4 HD (720p + Audio)', res: '720p', size: '~22 MB', format_id: 'mp4-720' },
+            { label: 'MP4 SD (480p + Audio)', res: '480p', size: '~12 MB', format_id: 'mp4-480' }
+          ]
+        }
+      };
 
-    py.on('close', (code) => {
-      if (code !== 0 || !stdoutData) {
-        console.error('yt-dlp stderr:', stderrData);
-        return res.status(400).json({ error: '⚠️ Could not read video link. Please check the URL and try again.' });
-      }
-
-      try {
-        const info = JSON.parse(stdoutData);
-
-        const response = {
-          title: info.title || 'Social Media Video',
-          uploader: info.uploader || info.channel || info.artist || `${platform.name} Author`,
-          duration: formatDuration(info.duration),
-          duration_seconds: info.duration || 0,
-          thumbnail: info.thumbnail || (info.thumbnails && info.thumbnails.length > 0 ? info.thumbnails[info.thumbnails.length - 1].url : 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=800&q=80'),
-          platform,
-          url: cleanUrl,
-          views: info.view_count ? info.view_count.toLocaleString() : 'N/A',
-          formats: {
-            audio: [
-              { label: 'MP3 Ultra HD (320 kbps)', bitrate: '320k', size: '~8.5 MB', format_id: 'mp3-320' },
-              { label: 'MP3 High Quality (256 kbps)', bitrate: '256k', size: '~6.2 MB', format_id: 'mp3-256' },
-              { label: 'MP3 Standard (128 kbps)', bitrate: '128k', size: '~3.4 MB', format_id: 'mp3-128' },
-              { label: 'M4A Original Stream', bitrate: 'm4a', size: '~5.1 MB', format_id: 'm4a' }
-            ],
-            video: [
-              { label: 'MP4 4K Ultra HD (HDR Color Grade + Crisp Edge)', res: '2160p', size: '~120 MB', format_id: 'mp4-4k' },
-              { label: 'MP4 Full HD (1080p + Audio)', res: '1080p', size: '~45 MB', format_id: 'mp4-1080' },
-              { label: 'MP4 HD (720p + Audio)', res: '720p', size: '~22 MB', format_id: 'mp4-720' },
-              { label: 'MP4 SD (480p + Audio)', res: '480p', size: '~12 MB', format_id: 'mp4-480' }
-            ]
-          }
-        };
-
-        return res.json(response);
-      } catch (err) {
-        return res.status(400).json({ error: '⚠️ Could not read video link.' });
-      }
-    });
-  } catch (e) {
-    return res.status(500).json({ error: 'Internal extraction error.' });
-  }
+      return res.json(response);
+    } catch (err) {
+      return res.status(400).json({ error: '⚠️ Could not read video link.' });
+    }
+  });
 });
 
 // Stream Download Handler API with FFmpeg Muxing & 4K Master Video Color Grading
@@ -431,7 +472,7 @@ app.get('/api/download', (req, res) => {
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
   res.setHeader('Content-Type', type === 'audio' ? 'audio/mpeg' : 'video/mp4');
 
-  const args = ['-m', 'yt_dlp', '-o', '-'];
+  const args = ['-o', '-'];
   
   if (ffmpegPath) {
     args.push('--ffmpeg-location', ffmpegPath);
@@ -452,21 +493,7 @@ app.get('/api/download', (req, res) => {
   
   args.push(cleanUrl);
 
-  const py = spawn(pythonCmd, args);
-
-  py.stdout.pipe(res);
-
-  py.stderr.on('data', (d) => {});
-
-  py.on('error', (err) => {
-    if (!res.headersSent) {
-      res.status(500).send('Download stream failed');
-    }
-  });
-
-  req.on('close', () => {
-    py.kill();
-  });
+  runYtDlp(args, (code, stdout, stderr) => {});
 });
 
 // Fallback to index.html for SPA routing
