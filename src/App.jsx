@@ -65,10 +65,21 @@ export default function App() {
   // Smart URL extraction & domain check (auto-strips leading/trailing junk text)
   const extractValidMediaUrl = (input) => {
     if (!input || typeof input !== 'string') return null;
-    const match = input.match(/(https?:\/\/[^\s]+)/i);
+
+    let raw = input.trim();
+    // Cut off if second http/https exists in glued string
+    const secondHttp = raw.indexOf('http', 8);
+    if (secondHttp !== -1) {
+      raw = raw.substring(0, secondHttp);
+    }
+
+    const match = raw.match(/(https?:\/\/[^\s]+)/i);
     if (!match) return null;
 
-    const cleanUrl = match[0];
+    let cleanUrl = match[0];
+    // Strip trailing invalid glued words
+    cleanUrl = cleanUrl.replace(/(htt|http|https)$/i, '').replace(/[\s\W]+$/, '');
+
     const lower = cleanUrl.toLowerCase();
     const supportedDomains = [
       'youtube.com', 'youtu.be', 'instagram.com', 'tiktok.com',
@@ -90,7 +101,7 @@ export default function App() {
 
     if (!cleanUrl) {
       setMedia(null);
-      setError('Invalid link');
+      setError('Invalid link. Please paste a valid video or track URL.');
       return;
     }
 
@@ -107,12 +118,13 @@ export default function App() {
         setMedia(response.data);
       } else {
         setMedia(null);
-        setError('Link not found');
+        setError('Could not extract media info.');
       }
     } catch (err) {
       console.error('API Error:', err);
       setMedia(null);
-      setError('Invalid link');
+      const serverMsg = err.response?.data?.error;
+      setError(serverMsg || 'Could not fetch video. Please check the link and try again.');
     } finally {
       setLoading(false);
     }

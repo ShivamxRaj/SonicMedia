@@ -319,14 +319,13 @@ app.get('/api/payment-status', (req, res) => {
   res.json({ utr: cleanUtr, status: 'NOT_FOUND' });
 });
 
-// Extract Media Metadata API with Smart URL Cleaner & Error Classifier
+// Extract Media Metadata API with --ignore-no-formats-error Flag
 app.get('/api/info', async (req, res) => {
   const { url } = req.query;
 
-  // Clean trailing glued text or params
   let rawUrl = (url || '').trim();
   
-  // If multiple http/https are glued, cut off at second "http"
+  // Cut off if multiple http/https are glued
   const secondHttp = rawUrl.indexOf('http', 8);
   if (secondHttp !== -1) {
     rawUrl = rawUrl.substring(0, secondHttp);
@@ -336,7 +335,6 @@ app.get('/api/info', async (req, res) => {
   let cleanUrl = match ? match[0] : null;
 
   if (cleanUrl) {
-    // Strip trailing fragment text like glued "htt"
     cleanUrl = cleanUrl.replace(/(htt|http|https)$/i, '').replace(/[\s\W]+$/, '');
   }
 
@@ -352,7 +350,7 @@ app.get('/api/info', async (req, res) => {
   console.log(`[API /info] Extracting metadata for: ${cleanUrl}`);
 
   try {
-    const py = spawn('python', ['-m', 'yt_dlp', '--dump-single-json', '--no-warnings', '--no-playlist', cleanUrl]);
+    const py = spawn('python', ['-m', 'yt_dlp', '--dump-single-json', '--ignore-no-formats-error', '--no-warnings', '--no-playlist', cleanUrl]);
     let stdoutData = '';
     let stderrData = '';
 
@@ -366,14 +364,8 @@ app.get('/api/info', async (req, res) => {
 
     py.on('close', (code) => {
       if (code !== 0 || !stdoutData) {
-        const isBotFlagged = stderrData.includes('Sign in') || stderrData.includes('confirm you') || stderrData.includes('bot');
-        const isAgeRestricted = stderrData.includes('age') || stderrData.includes('restricted');
-        
-        if (isBotFlagged || isAgeRestricted) {
-          return res.status(400).json({ error: '⚠️ This specific YouTube video requires login/age verification. Please try another video or song link!' });
-        }
-
-        return res.status(400).json({ error: '⚠️ Link not found! Please check the video link and try again.' });
+        console.error('yt-dlp stderr:', stderrData);
+        return res.status(400).json({ error: '⚠️ Could not read video link. Please check the URL and try again.' });
       }
 
       try {
