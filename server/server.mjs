@@ -525,6 +525,9 @@ app.get('/api/info', async (req, res) => {
         if (videoFmt) directVideoUrl = videoFmt.url;
       }
 
+      const defaultAudioTarget = directAudioUrl || `/api/download?url=${encodeURIComponent(cleanUrl)}&type=audio&quality=320k&title=${encodeURIComponent(info.title || 'audio')}`;
+      const defaultVideoTarget = directVideoUrl || `/api/download?url=${encodeURIComponent(cleanUrl)}&type=video&quality=1080p&title=${encodeURIComponent(info.title || 'video')}`;
+
       const response = {
         title: info.title || 'Social Media Video',
         uploader: info.uploader || info.channel || info.artist || `${platform.name} Author`,
@@ -536,16 +539,16 @@ app.get('/api/info', async (req, res) => {
         views: info.view_count ? info.view_count.toLocaleString() : 'N/A',
         formats: {
           audio: [
-            { label: 'MP3 Ultra HD (320 kbps)', bitrate: '320k', size: '~8.5 MB', format_id: 'mp3-320', download_url: directAudioUrl },
-            { label: 'MP3 High Quality (256 kbps)', bitrate: '256k', size: '~6.2 MB', format_id: 'mp3-256', download_url: directAudioUrl },
-            { label: 'MP3 Standard (128 kbps)', bitrate: '128k', size: '~3.4 MB', format_id: 'mp3-128', download_url: directAudioUrl },
-            { label: 'M4A Original Stream', bitrate: 'm4a', size: '~5.1 MB', format_id: 'mp3-128', download_url: directAudioUrl }
+            { label: 'MP3 Ultra HD (320 kbps)', bitrate: '320k', size: '~8.5 MB', format_id: 'mp3-320', download_url: defaultAudioTarget },
+            { label: 'MP3 High Quality (256 kbps)', bitrate: '256k', size: '~6.2 MB', format_id: 'mp3-256', download_url: defaultAudioTarget },
+            { label: 'MP3 Standard (128 kbps)', bitrate: '128k', size: '~3.4 MB', format_id: 'mp3-128', download_url: defaultAudioTarget },
+            { label: 'M4A Original Stream', bitrate: 'm4a', size: '~5.1 MB', format_id: 'mp3-128', download_url: defaultAudioTarget }
           ],
           video: [
-            { label: 'MP4 4K Ultra HD (HDR Color Grade + Crisp Edge)', res: '2160p', size: '~120 MB', format_id: 'mp4-4k', download_url: directVideoUrl },
-            { label: 'MP4 Full HD (1080p + Audio)', res: '1080p', size: '~45 MB', format_id: 'mp4-1080', download_url: directVideoUrl },
-            { label: 'MP4 HD (720p + Audio)', res: '720p', size: '~22 MB', format_id: 'mp4-720', download_url: directVideoUrl },
-            { label: 'MP4 SD (480p + Audio)', res: '480p', size: '~12 MB', format_id: 'mp4-480', download_url: directVideoUrl }
+            { label: 'MP4 4K Ultra HD (HDR Color Grade + Crisp Edge)', res: '2160p', size: '~120 MB', format_id: 'mp4-4k', download_url: defaultVideoTarget },
+            { label: 'MP4 Full HD (1080p + Audio)', res: '1080p', size: '~45 MB', format_id: 'mp4-1080', download_url: defaultVideoTarget },
+            { label: 'MP4 HD (720p + Audio)', res: '720p', size: '~22 MB', format_id: 'mp4-720', download_url: defaultVideoTarget },
+            { label: 'MP4 SD (480p + Audio)', res: '480p', size: '~12 MB', format_id: 'mp4-480', download_url: defaultVideoTarget }
           ]
         }
       };
