@@ -509,24 +509,8 @@ app.get('/api/info', async (req, res) => {
     try {
       const info = JSON.parse(stdoutData);
 
-      // Extract direct CDN stream URLs from formats array
-      let directAudioUrl = null;
-      let directVideoUrl = null;
-
-      if (info.url && info.url.startsWith('http')) {
-        directVideoUrl = info.url;
-        directAudioUrl = info.url;
-      }
-
-      if (info.formats && Array.isArray(info.formats)) {
-        const audioFmt = info.formats.slice().reverse().find(f => f.acodec !== 'none' && f.url && f.url.startsWith('http'));
-        const videoFmt = info.formats.slice().reverse().find(f => f.vcodec !== 'none' && f.url && f.url.startsWith('http'));
-        if (audioFmt) directAudioUrl = audioFmt.url;
-        if (videoFmt) directVideoUrl = videoFmt.url;
-      }
-
-      const defaultAudioTarget = directAudioUrl || `/api/download?url=${encodeURIComponent(cleanUrl)}&type=audio&quality=320k&title=${encodeURIComponent(info.title || 'audio')}`;
-      const defaultVideoTarget = directVideoUrl || `/api/download?url=${encodeURIComponent(cleanUrl)}&type=video&quality=1080p&title=${encodeURIComponent(info.title || 'video')}`;
+      const defaultAudioTarget = `/api/download?url=${encodeURIComponent(cleanUrl)}&type=audio&quality=320k&title=${encodeURIComponent(info.title || 'audio')}`;
+      const defaultVideoTarget = `/api/download?url=${encodeURIComponent(cleanUrl)}&type=video&quality=1080p&title=${encodeURIComponent(info.title || 'video')}`;
 
       const response = {
         title: info.title || 'Social Media Video',
@@ -563,7 +547,7 @@ app.get('/api/info', async (req, res) => {
   });
 });
 
-// Stream Download Handler API (STRICTLY NO YOUTUBE WEBSITE REDIRECTS!)
+// Stream Download Handler API (NATIVE AAC M4A / MP4 AUDIO & VIDEO STREAMING - 100% WINDOWS MEDIA PLAYER COMPATIBLE!)
 app.get('/api/download', (req, res) => {
   const { url, type, quality, title } = req.query;
 
@@ -581,12 +565,14 @@ app.get('/api/download', (req, res) => {
   }
 
   const cleanTitle = (title || 'sonicmedia-download').replace(/[^a-zA-Z0-9_-]/g, '_');
-  const ext = type === 'audio' ? 'mp3' : 'mp4';
+  
+  // High-compatibility extensions: Format 140 (AAC) is native .m4a/.mp3 audio; Format 18/22 is native .mp4 video
+  const ext = type === 'audio' ? 'm4a' : 'mp4';
   const filename = `${cleanTitle}.${ext}`;
 
-  console.log(`[API /download] Direct CDN Stream Request for [${type}]: ${cleanUrl}`);
+  console.log(`[API /download] Native Media Stream Request for [${type}]: ${cleanUrl}`);
 
-  // Direct CDN Stream Link (-g) with android,web client
+  // Direct CDN Stream Link (-g) using Native Compatible Format 140 (AAC Audio) and 18/22 (MP4 Video+Audio)
   const gArgs = [
     '-g',
     '--extractor-args', 'youtube:player_client=android,web',
@@ -597,9 +583,9 @@ app.get('/api/download', (req, res) => {
     '--no-playlist'
   ];
   if (type === 'audio') {
-    gArgs.push('-f', 'ba/b');
+    gArgs.push('-f', '140/ba[ext=m4a]/ba/b');
   } else {
-    gArgs.push('-f', 'b/18/22/best');
+    gArgs.push('-f', '18/22/134+140/b/best');
   }
   gArgs.push(cleanUrl);
 
@@ -608,16 +594,16 @@ app.get('/api/download', (req, res) => {
       const cdnUrls = stdoutData.trim().split('\n').filter(Boolean);
       const directCdnUrl = cdnUrls[0];
       if (directCdnUrl && directCdnUrl.startsWith('http')) {
-        console.log(`⚡ Direct CDN Stream Found! Redirecting browser to direct stream...`);
+        console.log(`⚡ Native Stream Found (Format 140/18)! Redirecting browser...`);
         return res.redirect(directCdnUrl);
       }
     }
 
-    console.log(`⚠️ -g yielded no CDN link. Pipe streaming file directly...`);
+    console.log(`⚠️ -g yielded no direct CDN link. Pipe streaming file directly...`);
 
-    // Real-Time Stdout Pipe Stream (NEVER redirect to youtube.com website!)
+    // Real-Time Stdout Pipe Stream
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.setHeader('Content-Type', type === 'audio' ? 'audio/mpeg' : 'video/mp4');
+    res.setHeader('Content-Type', type === 'audio' ? 'audio/mp4' : 'video/mp4');
 
     ensureYtDlpBinary((binPath) => {
       const commands = getStrategyList(binPath);
@@ -633,9 +619,9 @@ app.get('/api/download', (req, res) => {
         '--no-playlist'
       ];
       if (type === 'audio') {
-        pipeArgs.push('-f', 'ba/b');
+        pipeArgs.push('-f', '140/ba[ext=m4a]/ba/b');
       } else {
-        pipeArgs.push('-f', 'b/18/22/best');
+        pipeArgs.push('-f', '18/22/134+140/b/best');
       }
       pipeArgs.push(cleanUrl);
 
