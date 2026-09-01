@@ -5,9 +5,9 @@ import fs from 'fs';
 import path from 'path';
 import https from 'https';
 
-// Add ~/.local/bin and /usr/local/bin to PATH for Render Linux hosting environment
+// Add Render Linux VirtualEnv and local paths to process.env.PATH
 const homeDir = process.env.HOME || '/home/render';
-process.env.PATH = `${homeDir}/.local/bin:${homeDir}/.local/lib/python3/site-packages:/usr/local/bin:${process.env.PATH}`;
+process.env.PATH = `/opt/render/project/src/.venv/bin:${homeDir}/.local/bin:${homeDir}/.local/lib/python3/site-packages:/usr/local/bin:${process.env.PATH}`;
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -207,9 +207,11 @@ function answerTelegramCallback(callbackQueryId, text) {
 // Start Telegram Polling loop
 pollTelegramUpdates();
 
-// Non-blocking yt-dlp execution strategy chain for cross-platform resilience
+// Resilient yt-dlp execution strategy chain including Render VirtualEnv paths
 function runYtDlp(args, callback) {
   const commands = [
+    { cmd: '/opt/render/project/src/.venv/bin/yt-dlp', extraArgs: [] },
+    { cmd: '/opt/render/project/src/.venv/bin/python', extraArgs: ['-m', 'yt_dlp'] },
     { cmd: 'yt-dlp', extraArgs: [] },
     { cmd: 'python3', extraArgs: ['-m', 'yt_dlp'] },
     { cmd: 'python', extraArgs: ['-m', 'yt_dlp'] },
