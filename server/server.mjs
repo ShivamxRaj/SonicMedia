@@ -244,7 +244,7 @@ function answerTelegramCallback(callbackQueryId, text) {
 // Start Telegram Polling loop
 pollTelegramUpdates();
 
-// Resilient yt-dlp execution strategy chain with TV player client 429 bypass
+// Resilient yt-dlp execution strategy chain with android,web player client 429 bypass
 function runYtDlp(args, callback) {
   ensureYtDlpBinary((downloadedBin) => {
     const commands = [];
@@ -458,7 +458,7 @@ app.get('/api/payment-status', (req, res) => {
   res.json({ utr: cleanUtr, status: 'NOT_FOUND' });
 });
 
-// Extract Media Metadata API with TV Player Client Bypass & Noembed Fallback
+// Extract Media Metadata API with android,web Player Client Bypass & Noembed Fallback
 app.get('/api/info', async (req, res) => {
   const { url } = req.query;
 
@@ -481,7 +481,7 @@ app.get('/api/info', async (req, res) => {
 
   const infoArgs = [
     '--dump-single-json',
-    '--extractor-args', 'youtube:player_client=tv,mweb,android',
+    '--extractor-args', 'youtube:player_client=android,web',
     '--force-ipv4',
     '--socket-timeout', '10',
     '--ignore-no-formats-error',
@@ -493,7 +493,6 @@ app.get('/api/info', async (req, res) => {
   runYtDlp(infoArgs, (code, stdoutData, stderrData) => {
     if (code !== 0 || !stdoutData) {
       console.error('yt-dlp stderr:', stderrData);
-      // Trigger Instant Noembed Fallback if YouTube returns 429
       if (platform.name === 'YouTube') {
         return fetchNoembedFallback(cleanUrl, platform, res);
       }
@@ -538,7 +537,7 @@ app.get('/api/info', async (req, res) => {
   });
 });
 
-// Stream Download Handler API with TV Client Bypass & 3-Layer Guarantee
+// Stream Download Handler API with Direct CDN Stream Redirection (NO YouTube Website Redirects!)
 app.get('/api/download', (req, res) => {
   const { url, type, quality, title } = req.query;
 
@@ -559,14 +558,14 @@ app.get('/api/download', (req, res) => {
   const ext = type === 'audio' ? 'mp3' : 'mp4';
   const filename = `${cleanTitle}.${ext}`;
 
-  console.log(`[API /download] Requesting [${type}] download for: ${cleanUrl}`);
+  console.log(`[API /download] Direct CDN Stream Request for [${type}]: ${cleanUrl}`);
 
-  // Layer 1: Try Direct CDN URL (-g) with TV Client Bypass
+  // Layer 1: Direct CDN Stream Link (-g) with android,web client
   const gArgs = [
     '-g',
-    '--extractor-args', 'youtube:player_client=tv,mweb,android',
+    '--extractor-args', 'youtube:player_client=android,web',
     '--force-ipv4',
-    '--socket-timeout', '8',
+    '--socket-timeout', '10',
     '--no-warnings',
     '--no-playlist'
   ];
@@ -582,14 +581,14 @@ app.get('/api/download', (req, res) => {
       const cdnUrls = stdoutData.trim().split('\n').filter(Boolean);
       const directCdnUrl = cdnUrls[0];
       if (directCdnUrl && directCdnUrl.startsWith('http')) {
-        console.log(`⚡ [Layer 1] Direct CDN Stream Found! Redirecting...`);
+        console.log(`⚡ Direct CDN Stream Found! Streaming file directly...`);
         return res.redirect(directCdnUrl);
       }
     }
 
-    console.log(`⚠️ [Layer 1] -g yielded no URL. Falling back to Layer 2 stdout pipe stream...`);
+    console.log(`⚠️ -g yielded no CDN link. Pipe streaming file directly...`);
 
-    // Layer 2: Stdout Pipe Stream (-o -) with --no-part & TV Client Bypass
+    // Layer 2: Real-Time Stdout Pipe Stream (NEVER redirect to youtube.com website!)
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.setHeader('Content-Type', type === 'audio' ? 'audio/mpeg' : 'video/mp4');
 
@@ -607,7 +606,7 @@ app.get('/api/download', (req, res) => {
 
       const pipeArgs = [
         '-o', '-',
-        '--extractor-args', 'youtube:player_client=tv,mweb,android',
+        '--extractor-args', 'youtube:player_client=android,web',
         '--no-part',
         '--force-ipv4',
         '--socket-timeout', '15',
@@ -623,8 +622,11 @@ app.get('/api/download', (req, res) => {
 
       function tryPipe(index) {
         if (index >= commands.length) {
-          console.error(`❌ [Layer 2] All pipe commands failed. Redirecting to cleanUrl.`);
-          return res.redirect(cleanUrl);
+          console.error(`❌ Stream pipe failed.`);
+          if (!res.headersSent) {
+            res.status(400).send('⚠️ Could not generate direct download stream. Please check link and try again.');
+          }
+          return;
         }
 
         const { cmd, extraArgs } = commands[index];
