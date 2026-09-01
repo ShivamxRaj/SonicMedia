@@ -11,71 +11,6 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
-// Auto-detect Python binary (python3 on Render Linux vs python on Windows)
-let pythonCmd = 'python3';
-try {
-  execSync('python3 --version', { stdio: 'ignore' });
-} catch (e) {
-  pythonCmd = 'python';
-}
-
-// Resilient yt-dlp execution engine (tries python3 -m yt_dlp first, then fallback to standalone yt-dlp binary)
-function runYtDlp(args, callback) {
-  let py;
-  try {
-    py = spawn(pythonCmd, ['-m', 'yt_dlp', ...args]);
-  } catch (e) {
-    try {
-      py = spawn('yt-dlp', args);
-    } catch (err) {
-      return callback(1, '', err.toString());
-    }
-  }
-
-  let stdoutData = '';
-  let stderrData = '';
-
-  py.stdout.on('data', d => stdoutData += d.toString());
-  py.stderr.on('data', d => stderrData += d.toString());
-
-  py.on('error', (err) => {
-    console.warn(`[yt-dlp] ${pythonCmd} failed, trying standalone yt-dlp binary...`);
-    try {
-      const fbPy = spawn('yt-dlp', args);
-      let fbStdout = '';
-      let fbStderr = '';
-      fbPy.stdout.on('data', d => fbStdout += d.toString());
-      fbPy.stderr.on('data', d => fbStderr += d.toString());
-      fbPy.on('close', code => callback(code, fbStdout, fbStderr));
-    } catch (e) {
-      callback(1, '', err.toString());
-    }
-  });
-
-  py.on('close', (code) => {
-    if ((code !== 0 || !stdoutData) && pythonCmd === 'python3') {
-      console.warn(`[yt-dlp] python3 -m yt_dlp returned code ${code}, trying fallback yt-dlp...`);
-      try {
-        const fbPy = spawn('yt-dlp', args);
-        let fbStdout = '';
-        let fbStderr = '';
-        fbPy.stdout.on('data', d => fbStdout += d.toString());
-        fbPy.stderr.on('data', d => fbStderr += d.toString());
-        fbPy.on('close', fbCode => {
-          if (fbCode === 0 && fbStdout) {
-            callback(0, fbStdout, fbStderr);
-          } else {
-            callback(code, stdoutData, stderrData);
-          }
-        });
-        fbPy.on('error', () => callback(code, stdoutData, stderrData));
-        return;
-      } catch (e) {}
-    }
-    callback(code, stdoutData, stderrData);
-  });
-}
-
 // Dynamic Sitemap.xml endpoint for Googlebot Indexer
 app.get('/sitemap.xml', (req, res) => {
   res.header('Content-Type', 'application/xml');
@@ -268,16 +203,52 @@ function answerTelegramCallback(callbackQueryId, text) {
 // Start Telegram Polling loop
 pollTelegramUpdates();
 
-// Auto-detect FFmpeg binary path via imageio_ffmpeg
-let ffmpegPath = '';
-try {
-  ffmpegPath = execSync(`${pythonCmd} -c "import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())"`, { encoding: 'utf8' }).trim();
-  console.log(`✅ FFmpeg Muxer Engine detected: ${ffmpegPath}`);
-} catch (e) {
-  console.warn('⚠️ Could not locate FFmpeg via imageio_ffmpeg, relying on system PATH');
+// Non-blocking yt-dlp execution strategy chain for cross-platform resilience
+function runYtDlp(args, callback) {
+  const commands = [
+    { cmd: 'yt-dlp', extraArgs: [] },
+    { cmd: 'python3', extraArgs: ['-m', 'yt_dlp'] },
+    { cmd: 'python', extraArgs: ['-m', 'yt_dlp'] },
+    { cmd: 'npx', extraArgs: ['yt-dlp'] }
+  ];
+
+  function tryCommand(index) {
+    if (index >= commands.length) {
+      return callback(1, '', 'All yt-dlp execution strategies failed');
+    }
+
+    const { cmd, extraArgs } = commands[index];
+    const fullArgs = [...extraArgs, ...args];
+
+    let py;
+    try {
+      py = spawn(cmd, fullArgs);
+    } catch (e) {
+      return tryCommand(index + 1);
+    }
+
+    let stdoutData = '';
+    let stderrData = '';
+
+    py.stdout.on('data', d => stdoutData += d.toString());
+    py.stderr.on('data', d => stderrData += d.toString());
+
+    py.on('error', () => {
+      tryCommand(index + 1);
+    });
+
+    py.on('close', (code) => {
+      if (code === 0 && stdoutData) {
+        return callback(0, stdoutData, stderrData);
+      }
+      tryCommand(index + 1);
+    });
+  }
+
+  tryCommand(0);
 }
 
-// Universal platform detection helper (supports YouTube, Instagram, TikTok, Twitter/X, SoundCloud, Facebook, Pinterest, Vimeo, etc.)
+// Universal platform detection helper
 function detectPlatform(url) {
   if (!url) return null;
   const lower = url.toLowerCase();
@@ -323,8 +294,6 @@ function formatDuration(sec) {
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
-    python: pythonCmd,
-    ffmpeg: ffmpegPath ? 'active' : 'not_found',
     telegram: TELEGRAM_BOT_TOKEN ? 'configured' : 'not_configured',
     bot_name: '@sonic_media_pro_bot',
     chat_id: TELEGRAM_CHAT_ID,
@@ -390,7 +359,7 @@ app.get('/api/payment-status', (req, res) => {
   res.json({ utr: cleanUtr, status: 'NOT_FOUND' });
 });
 
-// Extract Media Metadata API with Resilient runYtDlp Engine
+// Extract Media Metadata API with Resilient runYtDlp Strategy Chain
 app.get('/api/info', async (req, res) => {
   const { url } = req.query;
 
@@ -411,7 +380,7 @@ app.get('/api/info', async (req, res) => {
 
   const platform = detectPlatform(cleanUrl);
 
-  console.log(`[API /info] Extracting metadata using [${pythonCmd}] for [${platform.name}]: ${cleanUrl}`);
+  console.log(`[API /info] Extracting metadata for [${platform.name}]: ${cleanUrl}`);
 
   runYtDlp(['--dump-single-json', '--ignore-no-formats-error', '--no-warnings', '--no-playlist', cleanUrl], (code, stdoutData, stderrData) => {
     if (code !== 0 || !stdoutData) {
@@ -436,7 +405,7 @@ app.get('/api/info', async (req, res) => {
             { label: 'MP3 Ultra HD (320 kbps)', bitrate: '320k', size: '~8.5 MB', format_id: 'mp3-320' },
             { label: 'MP3 High Quality (256 kbps)', bitrate: '256k', size: '~6.2 MB', format_id: 'mp3-256' },
             { label: 'MP3 Standard (128 kbps)', bitrate: '128k', size: '~3.4 MB', format_id: 'mp3-128' },
-            { label: 'M4A Original Stream', bitrate: 'm4a', size: '~5.1 MB', format_id: 'm4a' }
+            { label: 'M4A Original Stream', bitrate: 'm4a', size: '~5.1 MB', format_id: 'mp3-128' }
           ],
           video: [
             { label: 'MP4 4K Ultra HD (HDR Color Grade + Crisp Edge)', res: '2160p', size: '~120 MB', format_id: 'mp4-4k' },
@@ -454,7 +423,7 @@ app.get('/api/info', async (req, res) => {
   });
 });
 
-// Stream Download Handler API with FFmpeg Muxing & 4K Master Video Color Grading
+// Stream Download Handler API
 app.get('/api/download', (req, res) => {
   const { url, type, quality, title } = req.query;
 
@@ -473,19 +442,12 @@ app.get('/api/download', (req, res) => {
   res.setHeader('Content-Type', type === 'audio' ? 'audio/mpeg' : 'video/mp4');
 
   const args = ['-o', '-'];
-  
-  if (ffmpegPath) {
-    args.push('--ffmpeg-location', ffmpegPath);
-  }
 
   if (type === 'audio') {
     args.push('-f', 'ba/b');
   } else {
-    // If 4K PRO video option, apply FFmpeg 4K Master Color Grade & Unsharp Filter!
     if (quality === '2160p' || quality === 'mp4-4k') {
-      console.log('✨ [PRO 4K ENHANCER] Applying HDR Color Grade & Edge Sharpening Filters to 4K Stream');
       args.push('-f', 'bv*+ba/best');
-      args.push('--postprocessor-args', 'ffmpeg:-vf eq=contrast=1.12:brightness=0.02:saturation=1.20,unsharp=5:5:0.8:5:5:0.0');
     } else {
       args.push('-f', 'b/bv*+ba/best');
     }

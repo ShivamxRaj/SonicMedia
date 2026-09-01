@@ -5,8 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "postinstall": "python3 -m pip install --upgrade --break-system-packages yt-dlp imageio-ffmpeg || python3 -m pip install --upgrade yt-dlp imageio-ffmpeg || pip install yt-dlp || true",
-    "build": "python3 -m pip install --upgrade --break-system-packages yt-dlp imageio-ffmpeg || python3 -m pip install --upgrade yt-dlp imageio-ffmpeg || pip install yt-dlp || true; vite build",
+    "build": "vite build",
     "preview": "vite preview",
     "server": "node server/server.mjs",
     "start": "node server/server.mjs"
