@@ -124,16 +124,12 @@ export default function App() {
     }
   };
 
-  // Trigger File Download Stream & Log History
+  // Trigger Native Browser Stream Download & Log History
   const handleDownload = (item) => {
     const downloadUrl = `/api/download?url=${encodeURIComponent(item.url)}&type=${item.type}&quality=${item.quality}&title=${encodeURIComponent(item.title)}`;
     
-    const link = document.createElement('a');
-    link.href = downloadUrl;
-    link.download = `${item.title}.${item.type === 'audio' ? 'mp3' : 'mp4'}`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    // Direct window location redirect triggers browser's native file download prompt
+    window.location.href = downloadUrl;
 
     const historyItem = {
       title: item.title,

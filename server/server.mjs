@@ -13,7 +13,7 @@ app.use(express.json());
 
 const YTDLP_BIN = path.join(process.cwd(), 'server', process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
 
-// Auto-downloader for official standalone yt-dlp binary (works 100% on Render Linux and Windows)
+// Auto-downloader for official standalone yt-dlp binary
 function ensureYtDlpBinary(callback) {
   if (fs.existsSync(YTDLP_BIN)) {
     return callback(YTDLP_BIN);
@@ -244,7 +244,7 @@ function answerTelegramCallback(callbackQueryId, text) {
 // Start Telegram Polling loop
 pollTelegramUpdates();
 
-// Resilient yt-dlp execution strategy chain with downloaded binary priority
+// Resilient yt-dlp execution strategy chain for info JSON
 function runYtDlp(args, callback) {
   ensureYtDlpBinary((downloadedBin) => {
     const commands = [];
@@ -278,7 +278,7 @@ function runYtDlp(args, callback) {
       let stdoutData = '';
       let stderrData = '';
 
-      py.on('error', (err) => {
+      py.on('error', () => {
         if (!handled) {
           handled = true;
           tryCommand(index + 1);
@@ -415,13 +415,11 @@ app.get('/api/payment-status', (req, res) => {
   res.json({ utr: cleanUtr, status: 'NOT_FOUND' });
 });
 
-// Extract Media Metadata API with Standalone Binary Auto-Downloader
+// Extract Media Metadata API
 app.get('/api/info', async (req, res) => {
   const { url } = req.query;
 
   let rawUrl = (url || '').trim();
-  
-  // Cut off if multiple http/https are glued
   const secondHttp = rawUrl.indexOf('http', 8);
   if (secondHttp !== -1) {
     rawUrl = rawUrl.substring(0, secondHttp);
@@ -479,7 +477,7 @@ app.get('/api/info', async (req, res) => {
   });
 });
 
-// Stream Download Handler API
+// Stream Download Handler API with Real-time Pipe Streaming to Express res
 app.get('/api/download', (req, res) => {
   const { url, type, quality, title } = req.query;
 
@@ -497,21 +495,73 @@ app.get('/api/download', (req, res) => {
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
   res.setHeader('Content-Type', type === 'audio' ? 'audio/mpeg' : 'video/mp4');
 
-  const args = ['-o', '-', '--force-ipv4', '--socket-timeout', '15'];
-
-  if (type === 'audio') {
-    args.push('-f', 'ba/b');
-  } else {
-    if (quality === '2160p' || quality === 'mp4-4k') {
-      args.push('-f', 'bv*+ba/best');
-    } else {
-      args.push('-f', 'b/bv*+ba/best');
+  ensureYtDlpBinary((downloadedBin) => {
+    const commands = [];
+    if (downloadedBin && fs.existsSync(downloadedBin)) {
+      commands.push({ cmd: downloadedBin, extraArgs: [] });
     }
-  }
-  
-  args.push(cleanUrl);
+    commands.push(
+      { cmd: 'yt-dlp', extraArgs: [] },
+      { cmd: 'python3', extraArgs: ['-m', 'yt_dlp'] },
+      { cmd: 'python', extraArgs: ['-m', 'yt_dlp'] },
+      { cmd: '/opt/render/project/src/.venv/bin/yt-dlp', extraArgs: [] }
+    );
 
-  runYtDlp(args, (code, stdout, stderr) => {});
+    const args = ['-o', '-', '--force-ipv4', '--socket-timeout', '15'];
+
+    if (type === 'audio') {
+      args.push('-f', 'ba/b');
+    } else {
+      if (quality === '2160p' || quality === 'mp4-4k') {
+        args.push('-f', 'bv*+ba/best');
+      } else {
+        args.push('-f', 'b/bv*+ba/best');
+      }
+    }
+    
+    args.push(cleanUrl);
+
+    function tryStream(index) {
+      if (index >= commands.length) {
+        if (!res.headersSent) res.status(500).send('Download failed');
+        return;
+      }
+
+      const { cmd, extraArgs } = commands[index];
+      const fullArgs = [...extraArgs, ...args];
+
+      let child;
+      let hasData = false;
+
+      try {
+        child = spawn(cmd, fullArgs);
+      } catch (e) {
+        return tryStream(index + 1);
+      }
+
+      child.stdout.on('data', (chunk) => {
+        hasData = true;
+        res.write(chunk);
+      });
+
+      child.on('error', () => {
+        if (!hasData) tryStream(index + 1);
+      });
+
+      child.on('close', (code) => {
+        if (!hasData && code !== 0) {
+          return tryStream(index + 1);
+        }
+        res.end();
+      });
+
+      req.on('close', () => {
+        try { child.kill(); } catch (e) {}
+      });
+    }
+
+    tryStream(0);
+  });
 });
 
 // Fallback to index.html for SPA routing
