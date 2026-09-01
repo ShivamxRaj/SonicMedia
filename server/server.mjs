@@ -244,8 +244,36 @@ function answerTelegramCallback(callbackQueryId, text) {
 // Start Telegram Polling loop
 pollTelegramUpdates();
 
-// Resilient yt-dlp execution strategy chain with android,web player client 429 bypass
+// Global cached working executable for ultra-fast < 1.0s response
+let CACHED_YTDLP_CMD = null;
+
 function runYtDlp(args, callback) {
+  if (CACHED_YTDLP_CMD) {
+    const { cmd, extraArgs } = CACHED_YTDLP_CMD;
+    let py = spawn(cmd, [...extraArgs, ...args]);
+    let stdoutData = '';
+    let stderrData = '';
+    let handled = false;
+
+    py.on('error', () => {
+      if (!handled) {
+        handled = true;
+        CACHED_YTDLP_CMD = null;
+        runYtDlp(args, callback);
+      }
+    });
+
+    py.stdout.on('data', d => stdoutData += d.toString());
+    py.stderr.on('data', d => stderrData += d.toString());
+
+    py.on('close', (code) => {
+      if (handled) return;
+      handled = true;
+      return callback(code, stdoutData, stderrData);
+    });
+    return;
+  }
+
   ensureYtDlpBinary((downloadedBin) => {
     const commands = [];
     if (downloadedBin && fs.existsSync(downloadedBin)) {
@@ -253,9 +281,9 @@ function runYtDlp(args, callback) {
     }
     commands.push(
       { cmd: 'yt-dlp', extraArgs: [] },
+      { cmd: '/opt/render/project/src/.venv/bin/yt-dlp', extraArgs: [] },
       { cmd: 'python3', extraArgs: ['-m', 'yt_dlp'] },
-      { cmd: 'python', extraArgs: ['-m', 'yt_dlp'] },
-      { cmd: '/opt/render/project/src/.venv/bin/yt-dlp', extraArgs: [] }
+      { cmd: 'python', extraArgs: ['-m', 'yt_dlp'] }
     );
 
     function tryCommand(index) {
@@ -292,6 +320,8 @@ function runYtDlp(args, callback) {
         if (handled) return;
         if (code === 0 && stdoutData) {
           handled = true;
+          CACHED_YTDLP_CMD = { cmd, extraArgs };
+          console.log(`⚡ Cached working yt-dlp executable: ${cmd}`);
           return callback(0, stdoutData, stderrData);
         }
         handled = true;
@@ -483,7 +513,7 @@ app.get('/api/info', async (req, res) => {
     '--dump-single-json',
     '--extractor-args', 'youtube:player_client=android,web',
     '--force-ipv4',
-    '--socket-timeout', '10',
+    '--socket-timeout', '8',
     '--ignore-no-formats-error',
     '--no-warnings',
     '--no-playlist',
@@ -537,7 +567,7 @@ app.get('/api/info', async (req, res) => {
   });
 });
 
-// Stream Download Handler API with Direct CDN Stream Redirection (NO YouTube Website Redirects!)
+// Stream Download Handler API with Direct High-Speed CDN Stream Redirection (NEVER redirect to YouTube.com!)
 app.get('/api/download', (req, res) => {
   const { url, type, quality, title } = req.query;
 
@@ -560,12 +590,12 @@ app.get('/api/download', (req, res) => {
 
   console.log(`[API /download] Direct CDN Stream Request for [${type}]: ${cleanUrl}`);
 
-  // Layer 1: Direct CDN Stream Link (-g) with android,web client
+  // Direct CDN Stream Link (-g) with android,web client
   const gArgs = [
     '-g',
     '--extractor-args', 'youtube:player_client=android,web',
     '--force-ipv4',
-    '--socket-timeout', '10',
+    '--socket-timeout', '6',
     '--no-warnings',
     '--no-playlist'
   ];
@@ -581,14 +611,14 @@ app.get('/api/download', (req, res) => {
       const cdnUrls = stdoutData.trim().split('\n').filter(Boolean);
       const directCdnUrl = cdnUrls[0];
       if (directCdnUrl && directCdnUrl.startsWith('http')) {
-        console.log(`⚡ Direct CDN Stream Found! Streaming file directly...`);
+        console.log(`⚡ Direct CDN Stream Found! Redirecting browser...`);
         return res.redirect(directCdnUrl);
       }
     }
 
     console.log(`⚠️ -g yielded no CDN link. Pipe streaming file directly...`);
 
-    // Layer 2: Real-Time Stdout Pipe Stream (NEVER redirect to youtube.com website!)
+    // Real-Time Stdout Pipe Stream (NEVER redirect to youtube.com website!)
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.setHeader('Content-Type', type === 'audio' ? 'audio/mpeg' : 'video/mp4');
 
@@ -599,9 +629,9 @@ app.get('/api/download', (req, res) => {
       }
       commands.push(
         { cmd: 'yt-dlp', extraArgs: [] },
+        { cmd: '/opt/render/project/src/.venv/bin/yt-dlp', extraArgs: [] },
         { cmd: 'python3', extraArgs: ['-m', 'yt_dlp'] },
-        { cmd: 'python', extraArgs: ['-m', 'yt_dlp'] },
-        { cmd: '/opt/render/project/src/.venv/bin/yt-dlp', extraArgs: [] }
+        { cmd: 'python', extraArgs: ['-m', 'yt_dlp'] }
       );
 
       const pipeArgs = [
@@ -609,7 +639,7 @@ app.get('/api/download', (req, res) => {
         '--extractor-args', 'youtube:player_client=android,web',
         '--no-part',
         '--force-ipv4',
-        '--socket-timeout', '15',
+        '--socket-timeout', '10',
         '--no-warnings',
         '--no-playlist'
       ];
