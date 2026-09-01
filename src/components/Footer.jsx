@@ -5,7 +5,7 @@ export default function Footer({ onOpenTerms, onOpenPrivacy, onOpenDmca }) {
   return (
     <footer style={{
       borderTop: '1px solid var(--border-color)',
-      padding: '36px 24px 28px 24px',
+      padding: '28px 16px 24px 16px',
       background: 'rgba(5, 7, 12, 0.95)',
       color: 'var(--text-muted)'
     }}>
@@ -15,23 +15,24 @@ export default function Footer({ onOpenTerms, onOpenPrivacy, onOpenDmca }) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
+        flexDirection: 'row',
         flexWrap: 'wrap',
-        gap: '20px'
+        gap: '16px'
       }}>
         {/* Brand */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '0 auto 0 0' }}>
           <div style={{
-            width: '32px',
-            height: '32px',
-            borderRadius: '10px',
+            width: '28px',
+            height: '28px',
+            borderRadius: '8px',
             background: 'var(--primary-gradient)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center'
           }}>
-            <Music size={17} color="#fff" />
+            <Music size={15} color="#fff" />
           </div>
-          <span style={{ fontSize: '1.15rem', fontWeight: 800, color: '#fff' }}>
+          <span style={{ fontSize: '1.05rem', fontWeight: 800, color: '#fff' }}>
             Sonic<span className="text-gradient">Media</span> Studio
           </span>
         </div>
@@ -40,9 +41,9 @@ export default function Footer({ onOpenTerms, onOpenPrivacy, onOpenDmca }) {
         <div style={{
           display: 'flex',
           alignItems: 'center',
-          gap: '20px',
+          gap: '14px',
           flexWrap: 'wrap',
-          fontSize: '0.85rem'
+          fontSize: '0.825rem'
         }}>
           <button
             onClick={onOpenTerms}
@@ -53,14 +54,12 @@ export default function Footer({ onOpenTerms, onOpenPrivacy, onOpenDmca }) {
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
+              gap: '5px',
               fontWeight: 500,
-              transition: 'color 0.2s'
+              padding: '4px 0'
             }}
-            onMouseEnter={(e) => e.target.style.color = '#fff'}
-            onMouseLeave={(e) => e.target.style.color = 'var(--text-muted)'}
           >
-            <FileText size={15} />
+            <FileText size={14} />
             <span>Terms of Service</span>
           </button>
 
@@ -73,14 +72,12 @@ export default function Footer({ onOpenTerms, onOpenPrivacy, onOpenDmca }) {
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
+              gap: '5px',
               fontWeight: 500,
-              transition: 'color 0.2s'
+              padding: '4px 0'
             }}
-            onMouseEnter={(e) => e.target.style.color = '#fff'}
-            onMouseLeave={(e) => e.target.style.color = 'var(--text-muted)'}
           >
-            <ShieldCheck size={15} />
+            <ShieldCheck size={14} />
             <span>Privacy Policy</span>
           </button>
 
@@ -93,21 +90,19 @@ export default function Footer({ onOpenTerms, onOpenPrivacy, onOpenDmca }) {
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
+              gap: '5px',
               fontWeight: 500,
-              transition: 'color 0.2s'
+              padding: '4px 0'
             }}
-            onMouseEnter={(e) => e.target.style.color = '#fff'}
-            onMouseLeave={(e) => e.target.style.color = 'var(--text-muted)'}
           >
-            <ShieldAlert size={15} />
+            <ShieldAlert size={14} />
             <span>DMCA Disclaimer</span>
           </button>
         </div>
 
         {/* Copyright */}
-        <p style={{ fontSize: '0.825rem', color: 'var(--text-dim)' }}>
-          © {new Date().getFullYear()} SonicMedia Studio (sonicmedia.me). All rights reserved.
+        <p style={{ fontSize: '0.8rem', color: 'var(--text-dim)', margin: 0 }}>
+          © {new Date().getFullYear()} SonicMedia Studio (sonicmedia.me)
         </p>
       </div>
     </footer>
