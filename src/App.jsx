@@ -62,7 +62,7 @@ export default function App() {
     } catch (e) {}
   };
 
-  // Smart URL extraction & domain check (auto-strips leading/trailing junk text)
+  // Universal Bulletproof URL Extractor (YouTube, Instagram, TikTok, Twitter/X, SoundCloud, Facebook)
   const extractValidMediaUrl = (input) => {
     if (!input || typeof input !== 'string') return null;
 
@@ -73,20 +73,11 @@ export default function App() {
       raw = raw.substring(0, secondHttp);
     }
 
-    const match = raw.match(/(https?:\/\/[^\s]+)/i);
+    const match = raw.match(/(https?:\/\/[^\s>]+)/i);
     if (!match) return null;
 
     let cleanUrl = match[0];
-    // Strip trailing invalid glued words
-    cleanUrl = cleanUrl.replace(/(htt|http|https)$/i, '').replace(/[\s\W]+$/, '');
-
-    const lower = cleanUrl.toLowerCase();
-    const supportedDomains = [
-      'youtube.com', 'youtu.be', 'instagram.com', 'tiktok.com',
-      'twitter.com', 'x.com', 'facebook.com', 'fb.watch', 'soundcloud.com', 'spotify.com'
-    ];
-
-    if (supportedDomains.some((domain) => lower.includes(domain))) {
+    if (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) {
       return cleanUrl;
     }
     return null;
@@ -101,7 +92,7 @@ export default function App() {
 
     if (!cleanUrl) {
       setMedia(null);
-      setError('Invalid link. Please paste a valid video or track URL.');
+      setError('Please paste a valid video or track URL (e.g. YouTube, Instagram, TikTok, Twitter).');
       return;
     }
 

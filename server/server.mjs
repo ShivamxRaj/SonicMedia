@@ -212,7 +212,7 @@ try {
   console.warn('⚠️ Could not locate FFmpeg via imageio_ffmpeg, relying on system PATH');
 }
 
-// Platform detection helper
+// Universal platform detection helper (supports YouTube, Instagram, TikTok, Twitter/X, SoundCloud, Facebook, Pinterest, Vimeo, etc.)
 function detectPlatform(url) {
   if (!url) return null;
   const lower = url.toLowerCase();
@@ -237,7 +237,14 @@ function detectPlatform(url) {
   if (lower.includes('spotify.com')) {
     return { name: 'Spotify', icon: 'spotify', color: '#1db954' };
   }
-  return null;
+  if (lower.includes('pinterest.com') || lower.includes('pin.it')) {
+    return { name: 'Pinterest', icon: 'pinterest', color: '#e60023' };
+  }
+  if (lower.includes('vimeo.com')) {
+    return { name: 'Vimeo', icon: 'vimeo', color: '#1ab7ea' };
+  }
+  // Universal Web Media Fallback for any video or track site
+  return { name: 'Universal Web Media', icon: 'globe', color: '#a855f7' };
 }
 
 // Format duration from seconds to MM:SS
@@ -319,7 +326,7 @@ app.get('/api/payment-status', (req, res) => {
   res.json({ utr: cleanUtr, status: 'NOT_FOUND' });
 });
 
-// Extract Media Metadata API with --ignore-no-formats-error Flag
+// Extract Media Metadata API with Universal Platform Support & Smart URL Extractor
 app.get('/api/info', async (req, res) => {
   const { url } = req.query;
 
@@ -331,23 +338,16 @@ app.get('/api/info', async (req, res) => {
     rawUrl = rawUrl.substring(0, secondHttp);
   }
 
-  const match = rawUrl.match(/(https?:\/\/[^\s]+)/i);
+  const match = rawUrl.match(/(https?:\/\/[^\s>]+)/i);
   let cleanUrl = match ? match[0] : null;
 
-  if (cleanUrl) {
-    cleanUrl = cleanUrl.replace(/(htt|http|https)$/i, '').replace(/[\s\W]+$/, '');
-  }
-
   if (!cleanUrl) {
-    return res.status(400).json({ error: '⚠️ Invalid link! Please paste a valid video or track URL.' });
+    return res.status(400).json({ error: '⚠️ Please paste a valid video or track URL.' });
   }
 
   const platform = detectPlatform(cleanUrl);
-  if (!platform) {
-    return res.status(400).json({ error: '⚠️ Unsupported link! Please paste a YouTube, Instagram, or TikTok link.' });
-  }
 
-  console.log(`[API /info] Extracting metadata for: ${cleanUrl}`);
+  console.log(`[API /info] Extracting metadata for [${platform.name}]: ${cleanUrl}`);
 
   try {
     const py = spawn('python', ['-m', 'yt_dlp', '--dump-single-json', '--ignore-no-formats-error', '--no-warnings', '--no-playlist', cleanUrl]);
