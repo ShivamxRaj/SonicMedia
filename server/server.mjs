@@ -11,6 +11,26 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
+// Dynamic Sitemap.xml endpoint for Googlebot Indexer
+app.get('/sitemap.xml', (req, res) => {
+  res.header('Content-Type', 'application/xml');
+  res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://sonicmedia.me/</loc>
+    <lastmod>${new Date().toISOString().split('T')[0]}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>`);
+});
+
+// Dynamic Robots.txt endpoint
+app.get('/robots.txt', (req, res) => {
+  res.header('Content-Type', 'text/plain');
+  res.send(`User-agent: *\nAllow: /\nSitemap: https://sonicmedia.me/sitemap.xml\n`);
+});
+
 // Serve Production Frontend Dist static files so http://localhost:5000 ALSO loads the web app!
 const DIST_DIR = path.join(process.cwd(), 'dist');
 if (fs.existsSync(DIST_DIR)) {
@@ -338,7 +358,7 @@ app.get('/api/info', async (req, res) => {
               { label: 'MP4 4K Ultra HD (HDR Color Grade + Crisp Edge)', res: '2160p', size: '~120 MB', format_id: 'mp4-4k' },
               { label: 'MP4 Full HD (1080p + Audio)', res: '1080p', size: '~45 MB', format_id: 'mp4-1080' },
               { label: 'MP4 HD (720p + Audio)', res: '720p', size: '~22 MB', format_id: 'mp4-720' },
-              { label: 'MP4 SD (480p + Audio)', res: '480p', size: '~45 MB', format_id: 'mp4-480' }
+              { label: 'MP4 SD (480p + Audio)', res: '480p', size: '~12 MB', format_id: 'mp4-480' }
             ]
           }
         };
