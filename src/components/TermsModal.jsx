@@ -1,121 +1,176 @@
 import React from 'react';
-import { X, ShieldAlert, FileText, CheckCircle2 } from 'lucide-react';
+import { X, FileText, Check, Shield } from 'lucide-react';
 
 export default function TermsModal({ isOpen, onClose }) {
   if (!isOpen) return null;
+
+  const sections = [
+    {
+      id: '01',
+      title: 'Acceptance of Terms',
+      content: 'By accessing SonicMedia Studio (sonicmedia.me), you agree to comply with these terms. If you do not agree with any part of these terms, you may not use our services.'
+    },
+    {
+      id: '02',
+      title: 'Permitted Personal Use Only',
+      content: 'SonicMedia Studio is designed exclusively for personal, non-commercial offline backups and educational purposes. Converting copyrighted media for commercial distribution without authorization from content owners is strictly prohibited.'
+    },
+    {
+      id: '03',
+      title: 'Intellectual Property & Fair Use',
+      content: 'SonicMedia Studio does not host, index, or store any audio or video files on its servers. All conversion streams are processed in real-time. Users bear full responsibility for ensuring their download activity complies with local copyright laws and Fair Use doctrine.'
+    },
+    {
+      id: '04',
+      title: 'Prohibited Activities',
+      content: 'You agree not to use SonicMedia Studio for automated web scraping, denial-of-service (DDoS) attacks, or any malicious activity that disrupts server availability or violates third-party platform policies.'
+    },
+    {
+      id: '05',
+      title: 'Disclaimer & Service Availability',
+      content: 'Services are provided on an "as is" and "as available" basis without warranties of any kind. SonicMedia Studio reserves the right to modify or pause features without prior notice.'
+    }
+  ];
 
   return (
     <div style={{
       position: 'fixed',
       inset: 0,
-      background: 'rgba(5, 7, 13, 0.85)',
-      backdropFilter: 'blur(16px)',
+      background: 'rgba(3, 5, 12, 0.82)',
+      backdropFilter: 'blur(20px)',
+      WebkitBackdropFilter: 'blur(20px)',
       zIndex: 100,
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      padding: '24px'
+      padding: '20px'
     }}>
-      <div className="glass-card" style={{
-        maxWidth: '700px',
+      <div style={{
+        maxWidth: '680px',
         width: '100%',
-        padding: '32px',
+        background: 'linear-gradient(180deg, #111526 0%, #0a0d18 100%)',
+        border: '1px solid rgba(255, 255, 255, 0.12)',
+        borderRadius: '24px',
+        boxShadow: '0 25px 70px rgba(0, 0, 0, 0.9), 0 0 40px rgba(99, 102, 241, 0.12)',
+        padding: '28px 32px',
         position: 'relative',
-        borderRadius: 'var(--radius-xl)',
-        boxShadow: '0 30px 80px rgba(0, 0, 0, 0.8)',
-        maxHeight: '85vh',
-        overflowY: 'auto'
+        maxHeight: '88vh',
+        display: 'flex',
+        flexDirection: 'column'
       }}>
-        {/* Close Button */}
-        <button
-          onClick={onClose}
-          style={{
-            position: 'absolute',
-            top: '20px',
-            right: '20px',
-            background: 'rgba(255, 255, 255, 0.08)',
-            border: 'none',
-            color: '#fff',
-            width: '36px',
-            height: '36px',
-            borderRadius: '50%',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}
-        >
-          <X size={20} />
-        </button>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
-          <div style={{
-            width: '42px',
-            height: '42px',
-            borderRadius: '12px',
-            background: 'var(--primary-gradient)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}>
-            <FileText size={22} color="#fff" />
-          </div>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '20px' }}>
           <div>
-            <h3 style={{ fontSize: '1.3rem', fontWeight: 800 }}>Terms & Conditions</h3>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-              Official Usage Terms & Service Guidelines for SonicMedia Studio
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '4px 12px',
+              borderRadius: '20px',
+              background: 'rgba(99, 102, 241, 0.15)',
+              border: '1px solid rgba(99, 102, 241, 0.3)',
+              color: '#818cf8',
+              fontSize: '0.75rem',
+              fontWeight: 700,
+              letterSpacing: '0.05em',
+              textTransform: 'uppercase',
+              marginBottom: '10px'
+            }}>
+              <Shield size={12} />
+              <span>Legal Guidelines</span>
+            </div>
+            <h3 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#fff', margin: 0, letterSpacing: '-0.02em' }}>
+              Terms of Service
+            </h3>
+            <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: '4px', margin: 0 }}>
+              Last updated: September 2026 • SonicMedia Studio
             </p>
           </div>
+
+          <button
+            onClick={onClose}
+            style={{
+              background: 'rgba(255, 255, 255, 0.06)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              color: '#cbd5e1',
+              width: '36px',
+              height: '36px',
+              borderRadius: '50%',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
+              e.currentTarget.style.color = '#fff';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)';
+              e.currentTarget.style.color = '#cbd5e1';
+            }}
+          >
+            <X size={18} />
+          </button>
         </div>
 
+        {/* Scrollable Clause Cards */}
         <div style={{
-          color: 'var(--text-muted)',
-          fontSize: '0.9rem',
-          lineHeight: '1.6',
+          overflowY: 'auto',
+          paddingRight: '6px',
           display: 'flex',
           flexDirection: 'column',
-          gap: '16px'
+          gap: '14px',
+          flex: 1
         }}>
-          <section>
-            <h4 style={{ color: '#fff', fontSize: '1.05rem', marginBottom: '6px', fontWeight: 700 }}>1. Acceptance of Terms</h4>
-            <p>
-              By accessing and using <strong>SonicMedia Studio (sonicmedia.me)</strong>, you agree to comply with and be bound by these Terms and Conditions. If you do not agree to these terms, please do not use our services.
-            </p>
-          </section>
-
-          <section>
-            <h4 style={{ color: '#fff', fontSize: '1.05rem', marginBottom: '6px', fontWeight: 700 }}>2. Permitted Personal Use Only</h4>
-            <p>
-              SonicMedia Studio is designed strictly for personal, non-commercial offline backup and educational use. Users are prohibited from converting or downloading copyrighted content for commercial distribution or redistribution without authorization from content creators.
-            </p>
-          </section>
-
-          <section>
-            <h4 style={{ color: '#fff', fontSize: '1.05rem', marginBottom: '6px', fontWeight: 700 }}>3. Intellectual Property & Fair Use</h4>
-            <p>
-              SonicMedia Studio does not host, store, or index any copyrighted audio or video files on its servers. All media processing occurs dynamically via public streaming streams. Users are solely responsible for ensuring their usage adheres to local copyright laws and Fair Use regulations.
-            </p>
-          </section>
-
-          <section>
-            <h4 style={{ color: '#fff', fontSize: '1.05rem', marginBottom: '6px', fontWeight: 700 }}>4. User Responsibility & Compliance</h4>
-            <p>
-              You agree not to use SonicMedia Studio for automated scraping, malicious attacks, or any activity that violates third-party terms of service or copyright laws.
-            </p>
-          </section>
-
-          <section>
-            <h4 style={{ color: '#fff', fontSize: '1.05rem', marginBottom: '6px', fontWeight: 700 }}>5. Modifications to Service</h4>
-            <p>
-              SonicMedia Studio reserves the right to modify, suspend, or discontinue any feature or service at any time without prior notice.
-            </p>
-          </section>
+          {sections.map((item) => (
+            <div
+              key={item.id}
+              style={{
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: '1px solid rgba(255, 255, 255, 0.06)',
+                borderLeft: '3px solid #6366f1',
+                borderRadius: '14px',
+                padding: '16px 20px',
+                transition: 'background 0.2s'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#818cf8', opacity: 0.8 }}>{item.id}</span>
+                <h4 style={{ fontSize: '0.98rem', fontWeight: 700, color: '#f8fafc', margin: 0 }}>{item.title}</h4>
+              </div>
+              <p style={{ fontSize: '0.86rem', color: '#94a3b8', lineHeight: 1.6, margin: 0 }}>
+                {item.content}
+              </p>
+            </div>
+          ))}
         </div>
 
-        <div style={{ marginTop: '28px', textAlign: 'right' }}>
-          <button onClick={onClose} className="btn-primary" style={{ padding: '10px 24px' }}>
-            <CheckCircle2 size={16} />
-            <span>I Understand & Agree</span>
+        {/* Footer Bar */}
+        <div style={{
+          marginTop: '20px',
+          paddingTop: '16px',
+          borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between'
+        }}>
+          <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
+            SonicMedia Studio • sonicmedia.me
+          </span>
+
+          <button
+            onClick={onClose}
+            className="btn-primary"
+            style={{
+              padding: '8px 20px',
+              fontSize: '0.85rem',
+              borderRadius: '12px'
+            }}
+          >
+            <Check size={16} />
+            <span>I Accept & Agree</span>
           </button>
         </div>
       </div>

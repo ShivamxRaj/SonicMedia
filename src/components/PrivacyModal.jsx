@@ -1,113 +1,170 @@
 import React from 'react';
-import { X, ShieldCheck, Lock, CheckCircle2 } from 'lucide-react';
+import { X, ShieldCheck, Lock, Check } from 'lucide-react';
 
 export default function PrivacyModal({ isOpen, onClose }) {
   if (!isOpen) return null;
+
+  const sections = [
+    {
+      id: '01',
+      title: 'Zero Data Logging Policy',
+      content: 'SonicMedia Studio operates under a strict zero-data logging principle. We do not store, track, or record your converted media URLs, download history, or IP addresses on permanent database servers.'
+    },
+    {
+      id: '02',
+      title: 'Local Device Storage Only',
+      content: 'Your recent download activity and PRO status pass are stored locally inside your browser\'s private localStorage. This data stays entirely on your own device and can be cleared by you at any time.'
+    },
+    {
+      id: '03',
+      title: 'No Invasive Tracking Cookies',
+      content: 'We do not utilize invasive advertising profile cookies or third-party tracking scripts. Anonymous server performance metrics are solely utilized for server load management and anti-DDoS protection.'
+    },
+    {
+      id: '04',
+      title: 'Payment Reference Security',
+      content: 'When submitting a 12-digit UPI UTR reference for PRO Pass verification, the reference is transmitted over SSL encrypted HTTPS directly to our Telegram Bot for instant admin approval.'
+    }
+  ];
 
   return (
     <div style={{
       position: 'fixed',
       inset: 0,
-      background: 'rgba(5, 7, 13, 0.85)',
-      backdropFilter: 'blur(16px)',
+      background: 'rgba(3, 5, 12, 0.82)',
+      backdropFilter: 'blur(20px)',
+      WebkitBackdropFilter: 'blur(20px)',
       zIndex: 100,
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      padding: '24px'
+      padding: '20px'
     }}>
-      <div className="glass-card" style={{
-        maxWidth: '700px',
+      <div style={{
+        maxWidth: '680px',
         width: '100%',
-        padding: '32px',
+        background: 'linear-gradient(180deg, #111526 0%, #0a0d18 100%)',
+        border: '1px solid rgba(255, 255, 255, 0.12)',
+        borderRadius: '24px',
+        boxShadow: '0 25px 70px rgba(0, 0, 0, 0.9), 0 0 40px rgba(56, 189, 248, 0.12)',
+        padding: '28px 32px',
         position: 'relative',
-        borderRadius: 'var(--radius-xl)',
-        boxShadow: '0 30px 80px rgba(0, 0, 0, 0.8)',
-        maxHeight: '85vh',
-        overflowY: 'auto'
+        maxHeight: '88vh',
+        display: 'flex',
+        flexDirection: 'column'
       }}>
-        {/* Close Button */}
-        <button
-          onClick={onClose}
-          style={{
-            position: 'absolute',
-            top: '20px',
-            right: '20px',
-            background: 'rgba(255, 255, 255, 0.08)',
-            border: 'none',
-            color: '#fff',
-            width: '36px',
-            height: '36px',
-            borderRadius: '50%',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}
-        >
-          <X size={20} />
-        </button>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
-          <div style={{
-            width: '42px',
-            height: '42px',
-            borderRadius: '12px',
-            background: 'var(--primary-gradient)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}>
-            <ShieldCheck size={22} color="#fff" />
-          </div>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '20px' }}>
           <div>
-            <h3 style={{ fontSize: '1.3rem', fontWeight: 800 }}>Privacy Policy</h3>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-              How SonicMedia Studio respects and protects your data privacy
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '4px 12px',
+              borderRadius: '20px',
+              background: 'rgba(56, 189, 248, 0.15)',
+              border: '1px solid rgba(56, 189, 248, 0.3)',
+              color: '#38bdf8',
+              fontSize: '0.75rem',
+              fontWeight: 700,
+              letterSpacing: '0.05em',
+              textTransform: 'uppercase',
+              marginBottom: '10px'
+            }}>
+              <Lock size={12} />
+              <span>Data Protection</span>
+            </div>
+            <h3 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#fff', margin: 0, letterSpacing: '-0.02em' }}>
+              Privacy Policy
+            </h3>
+            <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: '4px', margin: 0 }}>
+              How SonicMedia Studio protects your privacy & data
             </p>
           </div>
+
+          <button
+            onClick={onClose}
+            style={{
+              background: 'rgba(255, 255, 255, 0.06)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              color: '#cbd5e1',
+              width: '36px',
+              height: '36px',
+              borderRadius: '50%',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
+              e.currentTarget.style.color = '#fff';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)';
+              e.currentTarget.style.color = '#cbd5e1';
+            }}
+          >
+            <X size={18} />
+          </button>
         </div>
 
+        {/* Scrollable Clause Cards */}
         <div style={{
-          color: 'var(--text-muted)',
-          fontSize: '0.9rem',
-          lineHeight: '1.6',
+          overflowY: 'auto',
+          paddingRight: '6px',
           display: 'flex',
           flexDirection: 'column',
-          gap: '16px'
+          gap: '14px',
+          flex: 1
         }}>
-          <section>
-            <h4 style={{ color: '#fff', fontSize: '1.05rem', marginBottom: '6px', fontWeight: 700 }}>1. Zero Data Logging Policy</h4>
-            <p>
-              SonicMedia Studio operates under a strict zero-logging policy. We do not store, track, or save your converted media URLs, download history, or personal IP addresses on permanent databases.
-            </p>
-          </section>
-
-          <section>
-            <h4 style={{ color: '#fff', fontSize: '1.05rem', marginBottom: '6px', fontWeight: 700 }}>2. Local Browser Storage Only</h4>
-            <p>
-              Your recent download history and PRO subscription state are saved locally inside your own web browser's <code>localStorage</code>. This data never leaves your device and can be cleared at any time.
-            </p>
-          </section>
-
-          <section>
-            <h4 style={{ color: '#fff', fontSize: '1.05rem', marginBottom: '6px', fontWeight: 700 }}>3. Cookies & Analytics</h4>
-            <p>
-              We do not use invasive tracking cookies or third-party ad profiling trackers. Anonymous server logs are strictly used for bandwidth health monitoring and DDoS prevention.
-            </p>
-          </section>
-
-          <section>
-            <h4 style={{ color: '#fff', fontSize: '1.05rem', marginBottom: '6px', fontWeight: 700 }}>4. Payment Reference Privacy</h4>
-            <p>
-              When submitting a 12-digit UPI UTR reference for PRO Pass verification, the reference is transmitted securely via HTTPS encrypted channels to our Telegram bot solely for manual payment verification.
-            </p>
-          </section>
+          {sections.map((item) => (
+            <div
+              key={item.id}
+              style={{
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: '1px solid rgba(255, 255, 255, 0.06)',
+                borderLeft: '3px solid #38bdf8',
+                borderRadius: '14px',
+                padding: '16px 20px',
+                transition: 'background 0.2s'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#38bdf8', opacity: 0.8 }}>{item.id}</span>
+                <h4 style={{ fontSize: '0.98rem', fontWeight: 700, color: '#f8fafc', margin: 0 }}>{item.title}</h4>
+              </div>
+              <p style={{ fontSize: '0.86rem', color: '#94a3b8', lineHeight: 1.6, margin: 0 }}>
+                {item.content}
+              </p>
+            </div>
+          ))}
         </div>
 
-        <div style={{ marginTop: '28px', textAlign: 'right' }}>
-          <button onClick={onClose} className="btn-primary" style={{ padding: '10px 24px' }}>
-            <CheckCircle2 size={16} />
+        {/* Footer Bar */}
+        <div style={{
+          marginTop: '20px',
+          paddingTop: '16px',
+          borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between'
+        }}>
+          <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
+            SonicMedia Studio • Privacy First
+          </span>
+
+          <button
+            onClick={onClose}
+            className="btn-primary"
+            style={{
+              padding: '8px 20px',
+              fontSize: '0.85rem',
+              borderRadius: '12px'
+            }}
+          >
+            <Check size={16} />
             <span>Got It</span>
           </button>
         </div>
