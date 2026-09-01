@@ -11,6 +11,14 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
+// Auto-detect Python binary (python3 on Render Linux vs python on Windows)
+let pythonCmd = 'python3';
+try {
+  execSync('python3 --version', { stdio: 'ignore' });
+} catch (e) {
+  pythonCmd = 'python';
+}
+
 // Dynamic Sitemap.xml endpoint for Googlebot Indexer
 app.get('/sitemap.xml', (req, res) => {
   res.header('Content-Type', 'application/xml');
@@ -206,7 +214,7 @@ pollTelegramUpdates();
 // Auto-detect FFmpeg binary path via imageio_ffmpeg
 let ffmpegPath = '';
 try {
-  ffmpegPath = execSync('python -c "import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())"', { encoding: 'utf8' }).trim();
+  ffmpegPath = execSync(`${pythonCmd} -c "import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())"`, { encoding: 'utf8' }).trim();
   console.log(`✅ FFmpeg Muxer Engine detected: ${ffmpegPath}`);
 } catch (e) {
   console.warn('⚠️ Could not locate FFmpeg via imageio_ffmpeg, relying on system PATH');
@@ -243,7 +251,6 @@ function detectPlatform(url) {
   if (lower.includes('vimeo.com')) {
     return { name: 'Vimeo', icon: 'vimeo', color: '#1ab7ea' };
   }
-  // Universal Web Media Fallback for any video or track site
   return { name: 'Universal Web Media', icon: 'globe', color: '#a855f7' };
 }
 
@@ -259,7 +266,7 @@ function formatDuration(sec) {
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
-    engine: 'python yt-dlp',
+    python: pythonCmd,
     ffmpeg: ffmpegPath ? 'active' : 'not_found',
     telegram: TELEGRAM_BOT_TOKEN ? 'configured' : 'not_configured',
     bot_name: '@sonic_media_pro_bot',
@@ -347,10 +354,10 @@ app.get('/api/info', async (req, res) => {
 
   const platform = detectPlatform(cleanUrl);
 
-  console.log(`[API /info] Extracting metadata for [${platform.name}]: ${cleanUrl}`);
+  console.log(`[API /info] Extracting metadata using [${pythonCmd}] for [${platform.name}]: ${cleanUrl}`);
 
   try {
-    const py = spawn('python', ['-m', 'yt_dlp', '--dump-single-json', '--ignore-no-formats-error', '--no-warnings', '--no-playlist', cleanUrl]);
+    const py = spawn(pythonCmd, ['-m', 'yt_dlp', '--dump-single-json', '--ignore-no-formats-error', '--no-warnings', '--no-playlist', cleanUrl]);
     let stdoutData = '';
     let stderrData = '';
 
@@ -445,7 +452,7 @@ app.get('/api/download', (req, res) => {
   
   args.push(cleanUrl);
 
-  const py = spawn('python', args);
+  const py = spawn(pythonCmd, args);
 
   py.stdout.pipe(res);
 
