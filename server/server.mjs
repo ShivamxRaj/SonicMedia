@@ -458,7 +458,7 @@ app.get('/api/payment-status', (req, res) => {
   res.json({ utr: cleanUtr, status: 'NOT_FOUND' });
 });
 
-// Extract Media Metadata API with android,web Player Client Bypass & Noembed Fallback
+// Extract Media Metadata API with ios,android Player Client Bypass & Noembed Fallback
 app.get('/api/info', async (req, res) => {
   const { url } = req.query;
 
@@ -481,7 +481,7 @@ app.get('/api/info', async (req, res) => {
 
   const infoArgs = [
     '--dump-single-json',
-    '--extractor-args', 'youtube:player_client=android,web',
+    '--extractor-args', 'youtube:player_client=ios,android',
     '--ignore-no-formats-error',
     '--force-ipv4',
     '--socket-timeout', '8',
@@ -558,7 +558,7 @@ app.get('/api/download', (req, res) => {
   }
 
   const cleanTitle = (title || 'sonicmedia-download').replace(/[^a-zA-Z0-9_-]/g, '_');
-  const ext = type === 'audio' ? 'mp4' : 'mp4';
+  const ext = 'mp4';
   const filename = `${cleanTitle}.${ext}`;
 
   console.log(`[API /download] Native Audio+Video Stream Request for [${type}]: ${cleanUrl}`);
@@ -567,7 +567,7 @@ app.get('/api/download', (req, res) => {
   const gArgs = [
     '-g',
     '-f', '18/22/b/best',
-    '--extractor-args', 'youtube:player_client=android,web',
+    '--extractor-args', 'youtube:player_client=ios,android',
     '--ignore-no-formats-error',
     '--force-ipv4',
     '--socket-timeout', '8',
@@ -603,7 +603,7 @@ app.get('/api/download', (req, res) => {
     const pipeArgs = [
       '-o', '-',
       '-f', '18/22/b/best',
-      '--extractor-args', 'youtube:player_client=android,web',
+      '--extractor-args', 'youtube:player_client=ios,android',
       '--ignore-no-formats-error',
       '--no-part',
       '--force-ipv4',
