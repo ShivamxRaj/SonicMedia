@@ -540,7 +540,7 @@ app.get('/api/info', async (req, res) => {
   });
 });
 
-// Stream Download Handler API (FORMAT 18 MP4 STREAM WITH UNIVERSAL H.264 VIDEO + AAC AUDIO FOR 100% SOUND & PLAYBACK COMPATIBILITY!)
+// Stream Download Handler API (DIRECT HIGH-FIDELITY AUDIO & VIDEO STREAMING - 100% SOUND & PLAYBACK COMPATIBLE!)
 app.get('/api/download', (req, res) => {
   const { url, type, quality, title } = req.query;
 
@@ -558,30 +558,41 @@ app.get('/api/download', (req, res) => {
   }
 
   const cleanTitle = (title || 'sonicmedia-download').replace(/[^a-zA-Z0-9_-]/g, '_');
-  const ext = 'mp4';
+  const ext = type === 'audio' ? 'm4a' : 'mp4';
   const filename = `${cleanTitle}.${ext}`;
 
-  console.log(`[API /download] Native Audio+Video Stream Request for [${type}]: ${cleanUrl}`);
+  console.log(`[API /download] Direct High-Quality Media Stream Request for [${type}]: ${cleanUrl}`);
 
-  // Direct CDN Stream Link (-g) using Format 18 (Native MP4 Video + AAC Audio - plays 100% sound on Windows Media Player!)
+  // Direct CDN Stream Link (-g)
   const gArgs = [
     '-g',
-    '-f', '18/22/b/best',
     '--extractor-args', 'youtube:player_client=ios,android',
     '--ignore-no-formats-error',
     '--force-ipv4',
     '--socket-timeout', '8',
     '--no-warnings',
-    '--no-playlist',
-    cleanUrl
+    '--no-playlist'
   ];
+
+  if (type === 'audio') {
+    gArgs.push('-f', 'ba/bestaudio/b');
+  } else {
+    gArgs.push('-f', '18/22/b/best');
+  }
+  gArgs.push(cleanUrl);
 
   runYtDlp(gArgs, (code, stdoutData) => {
     if (code === 0 && stdoutData) {
       const cdnUrls = stdoutData.trim().split('\n').filter(Boolean);
-      const directCdnUrl = cdnUrls[0];
+      let directCdnUrl = null;
+      if (type === 'audio') {
+        directCdnUrl = cdnUrls.find(u => u.includes('mime=audio')) || cdnUrls[cdnUrls.length - 1] || cdnUrls[0];
+      } else {
+        directCdnUrl = cdnUrls[0];
+      }
+
       if (directCdnUrl && directCdnUrl.startsWith('http')) {
-        console.log(`⚡ Native MP4 Stream Found! Redirecting browser...`);
+        console.log(`⚡ Direct High-Quality Media Stream Found! Redirecting browser...`);
         return res.redirect(directCdnUrl);
       }
     }
@@ -590,7 +601,7 @@ app.get('/api/download', (req, res) => {
 
     // Real-Time Stdout Pipe Stream
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.setHeader('Content-Type', 'video/mp4');
+    res.setHeader('Content-Type', type === 'audio' ? 'audio/mp4' : 'video/mp4');
 
     const commands = [
       { cmd: '/opt/render/project/src/.venv/bin/yt-dlp', extraArgs: [] },
@@ -602,16 +613,21 @@ app.get('/api/download', (req, res) => {
 
     const pipeArgs = [
       '-o', '-',
-      '-f', '18/22/b/best',
       '--extractor-args', 'youtube:player_client=ios,android',
       '--ignore-no-formats-error',
       '--no-part',
       '--force-ipv4',
       '--socket-timeout', '10',
       '--no-warnings',
-      '--no-playlist',
-      cleanUrl
+      '--no-playlist'
     ];
+
+    if (type === 'audio') {
+      pipeArgs.push('-f', 'ba/bestaudio/b');
+    } else {
+      pipeArgs.push('-f', '18/22/b/best');
+    }
+    pipeArgs.push(cleanUrl);
 
     function tryPipe(index) {
       if (index >= commands.length) {
