@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "postinstall": "python3 -m pip install --user yt-dlp imageio-ffmpeg || pip install --user yt-dlp imageio-ffmpeg || true",
+    "build": "python3 -m pip install --user yt-dlp imageio-ffmpeg || pip install --user yt-dlp imageio-ffmpeg || true; vite build",
     "preview": "vite preview",
     "server": "node server/server.mjs",
     "start": "node server/server.mjs"
@@ -17,7 +18,8 @@
     "express": "^4.21.2",
     "lucide-react": "^0.475.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "yt-dlp-exec": "^1.0.2"
   },
   "devDependencies": {
     "@types/react": "^18.3.18",

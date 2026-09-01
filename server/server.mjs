@@ -5,6 +5,10 @@ import fs from 'fs';
 import path from 'path';
 import https from 'https';
 
+// Add ~/.local/bin and /usr/local/bin to PATH for Render Linux hosting environment
+const homeDir = process.env.HOME || '/home/render';
+process.env.PATH = `${homeDir}/.local/bin:${homeDir}/.local/lib/python3/site-packages:/usr/local/bin:${process.env.PATH}`;
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -209,7 +213,7 @@ function runYtDlp(args, callback) {
     { cmd: 'yt-dlp', extraArgs: [] },
     { cmd: 'python3', extraArgs: ['-m', 'yt_dlp'] },
     { cmd: 'python', extraArgs: ['-m', 'yt_dlp'] },
-    { cmd: 'npx', extraArgs: ['yt-dlp'] }
+    { cmd: `${homeDir}/.local/bin/yt-dlp`, extraArgs: [] }
   ];
 
   function tryCommand(index) {
@@ -294,6 +298,7 @@ function formatDuration(sec) {
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
+    path: process.env.PATH,
     telegram: TELEGRAM_BOT_TOKEN ? 'configured' : 'not_configured',
     bot_name: '@sonic_media_pro_bot',
     chat_id: TELEGRAM_CHAT_ID,
