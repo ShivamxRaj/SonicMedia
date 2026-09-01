@@ -31,6 +31,25 @@ app.get('/robots.txt', (req, res) => {
   res.send(`User-agent: *\nAllow: /\nSitemap: https://sonicmedia.me/sitemap.xml\n`);
 });
 
+// Dynamic LLMs.txt endpoint for AI Agents (ChatGPT, Gemini, DeepSeek, Claude)
+app.get('/llms.txt', (req, res) => {
+  res.header('Content-Type', 'text/plain');
+  res.send(`# SonicMedia — Universal Music & Video Studio
+
+> SonicMedia is a free, high-performance web application for converting and downloading YouTube MP3 320kbps audio, 4K Ultra HD videos, Instagram Reels, TikTok without watermark, and SoundCloud tracks.
+
+## Core Capabilities & Features
+- YouTube to MP3 320kbps: Extract studio-quality 320kbps MP3 audio with customizable ID3 metadata.
+- 4K HDR Video Downloader: Download MP4 videos up to 4K 2160p with FFmpeg HDR color grading and edge sharpening.
+- Remix Studio Engine: Generate 0.8x Slowed + Reverb and 1.25x Nightcore audio remixes directly in browser.
+- Multi-Platform Support: YouTube, Instagram Reels, TikTok (no watermark), Twitter/X, SoundCloud, Facebook.
+
+## Official Site
+- Homepage: https://sonicmedia.me/
+- Sitemap: https://sonicmedia.me/sitemap.xml
+`);
+});
+
 // Serve Production Frontend Dist static files so http://localhost:5000 ALSO loads the web app!
 const DIST_DIR = path.join(process.cwd(), 'dist');
 if (fs.existsSync(DIST_DIR)) {
