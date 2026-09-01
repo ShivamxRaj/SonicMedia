@@ -13,13 +13,13 @@ app.use(express.json());
 
 const YTDLP_BIN = path.join(process.cwd(), 'server', process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
 
-// Auto-downloader for official standalone yt-dlp binary
+// Auto-downloader for official standalone yt-dlp binary (runs in background)
 function ensureYtDlpBinary(callback) {
   if (fs.existsSync(YTDLP_BIN)) {
-    return callback(YTDLP_BIN);
+    return callback ? callback(YTDLP_BIN) : null;
   }
 
-  console.log(`⏳ Downloading official standalone yt-dlp binary...`);
+  console.log(`⏳ Downloading official standalone yt-dlp binary in background...`);
   const downloadUrl = process.platform === 'win32'
     ? 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe'
     : 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp';
@@ -37,12 +37,12 @@ function ensureYtDlpBinary(callback) {
             try { fs.chmodSync(YTDLP_BIN, '755'); } catch (e) {}
           }
           console.log(`✅ Standalone yt-dlp binary downloaded successfully: ${YTDLP_BIN}`);
-          callback(YTDLP_BIN);
+          if (callback) callback(YTDLP_BIN);
         });
       });
     }).on('error', (err) => {
       console.error('Failed to download yt-dlp binary:', err);
-      callback(null);
+      if (callback) callback(null);
     });
   }
 
@@ -50,7 +50,7 @@ function ensureYtDlpBinary(callback) {
 }
 
 // Start downloading binary asynchronously in background
-ensureYtDlpBinary(() => {});
+ensureYtDlpBinary();
 
 // Dynamic Sitemap.xml endpoint for Googlebot Indexer
 app.get('/sitemap.xml', (req, res) => {
@@ -244,69 +244,61 @@ function answerTelegramCallback(callbackQueryId, text) {
 // Start Telegram Polling loop
 pollTelegramUpdates();
 
-// Priority strategy list with Render virtualenv paths first
-function getStrategyList(downloadedBin) {
-  const list = [];
-  if (downloadedBin && fs.existsSync(downloadedBin)) {
-    list.push({ cmd: downloadedBin, extraArgs: [] });
-  }
-  list.push(
+// Direct non-blocking execution strategy list with Render virtualenv paths first
+function runYtDlp(args, callback) {
+  const commands = [
     { cmd: '/opt/render/project/src/.venv/bin/yt-dlp', extraArgs: [] },
     { cmd: '/opt/render/project/src/.venv/bin/python', extraArgs: ['-m', 'yt_dlp'] },
     { cmd: 'yt-dlp', extraArgs: [] },
     { cmd: 'python3', extraArgs: ['-m', 'yt_dlp'] },
     { cmd: 'python', extraArgs: ['-m', 'yt_dlp'] }
-  );
-  return list;
-}
+  ];
+  if (fs.existsSync(YTDLP_BIN)) {
+    commands.unshift({ cmd: YTDLP_BIN, extraArgs: [] });
+  }
 
-function runYtDlp(args, callback) {
-  ensureYtDlpBinary((downloadedBin) => {
-    const commands = getStrategyList(downloadedBin);
-
-    function tryCommand(index) {
-      if (index >= commands.length) {
-        return callback(1, '', 'All yt-dlp execution strategies failed');
-      }
-
-      const { cmd, extraArgs } = commands[index];
-      const fullArgs = [...extraArgs, ...args];
-
-      let py;
-      let handled = false;
-
-      try {
-        py = spawn(cmd, fullArgs);
-      } catch (e) {
-        return tryCommand(index + 1);
-      }
-
-      let stdoutData = '';
-      let stderrData = '';
-
-      py.on('error', () => {
-        if (!handled) {
-          handled = true;
-          tryCommand(index + 1);
-        }
-      });
-
-      py.stdout.on('data', d => stdoutData += d.toString());
-      py.stderr.on('data', d => stderrData += d.toString());
-
-      py.on('close', (code) => {
-        if (handled) return;
-        if (code === 0 && stdoutData) {
-          handled = true;
-          return callback(0, stdoutData, stderrData);
-        }
-        handled = true;
-        tryCommand(index + 1);
-      });
+  function tryCommand(index) {
+    if (index >= commands.length) {
+      return callback(1, '', 'All yt-dlp execution strategies failed');
     }
 
-    tryCommand(0);
-  });
+    const { cmd, extraArgs } = commands[index];
+    const fullArgs = [...extraArgs, ...args];
+
+    let py;
+    let handled = false;
+
+    try {
+      py = spawn(cmd, fullArgs);
+    } catch (e) {
+      return tryCommand(index + 1);
+    }
+
+    let stdoutData = '';
+    let stderrData = '';
+
+    py.on('error', () => {
+      if (!handled) {
+        handled = true;
+        tryCommand(index + 1);
+      }
+    });
+
+    py.stdout.on('data', d => stdoutData += d.toString());
+    py.stderr.on('data', d => stderrData += d.toString());
+
+    py.on('close', (code) => {
+      if (handled) return;
+      if (code === 0 && stdoutData) {
+        handled = true;
+        return callback(0, stdoutData, stderrData);
+      }
+      handled = true;
+      tryCommand(index + 1);
+    });
+  }
+
+  tryCommand(0);
 }
 
 // Universal platform detection helper
@@ -548,7 +540,7 @@ app.get('/api/info', async (req, res) => {
   });
 });
 
-// Stream Download Handler API (FORMAT 18/22 MP4 WITH UNIVERSAL H.264 VIDEO + AAC AUDIO FOR 100% SOUND & PLAYBACK COMPATIBILITY!)
+// Stream Download Handler API (FORMAT 18 MP4 STREAM WITH UNIVERSAL H.264 VIDEO + AAC AUDIO FOR 100% SOUND & PLAYBACK COMPATIBILITY!)
 app.get('/api/download', (req, res) => {
   const { url, type, quality, title } = req.query;
 
@@ -571,7 +563,7 @@ app.get('/api/download', (req, res) => {
 
   console.log(`[API /download] Native Audio+Video Stream Request for [${type}]: ${cleanUrl}`);
 
-  // Direct CDN Stream Link (-g) using Format 18/22 (Native MP4 Video + AAC Audio - plays 100% sound on Windows Media Player!)
+  // Direct CDN Stream Link (-g) using Format 18 (Native MP4 Video + AAC Audio - plays 100% sound on Windows Media Player!)
   const gArgs = [
     '-g',
     '-f', '18/22/b/best',
@@ -600,64 +592,68 @@ app.get('/api/download', (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.setHeader('Content-Type', 'video/mp4');
 
-    ensureYtDlpBinary((binPath) => {
-      const commands = getStrategyList(binPath);
+    const commands = [
+      { cmd: '/opt/render/project/src/.venv/bin/yt-dlp', extraArgs: [] },
+      { cmd: '/opt/render/project/src/.venv/bin/python', extraArgs: ['-m', 'yt_dlp'] },
+      { cmd: 'yt-dlp', extraArgs: [] },
+      { cmd: 'python3', extraArgs: ['-m', 'yt_dlp'] },
+      { cmd: 'python', extraArgs: ['-m', 'yt_dlp'] }
+    ];
 
-      const pipeArgs = [
-        '-o', '-',
-        '-f', '18/22/b/best',
-        '--extractor-args', 'youtube:player_client=android,web',
-        '--ignore-no-formats-error',
-        '--no-part',
-        '--force-ipv4',
-        '--socket-timeout', '10',
-        '--no-warnings',
-        '--no-playlist',
-        cleanUrl
-      ];
+    const pipeArgs = [
+      '-o', '-',
+      '-f', '18/22/b/best',
+      '--extractor-args', 'youtube:player_client=android,web',
+      '--ignore-no-formats-error',
+      '--no-part',
+      '--force-ipv4',
+      '--socket-timeout', '10',
+      '--no-warnings',
+      '--no-playlist',
+      cleanUrl
+    ];
 
-      function tryPipe(index) {
-        if (index >= commands.length) {
-          console.error(`❌ Stream pipe failed.`);
-          if (!res.headersSent) {
-            res.status(400).send('⚠️ Could not generate direct download stream. Please check link and try again.');
-          }
-          return;
+    function tryPipe(index) {
+      if (index >= commands.length) {
+        console.error(`❌ Stream pipe failed.`);
+        if (!res.headersSent) {
+          res.status(400).send('⚠️ Could not generate direct download stream. Please check link and try again.');
         }
-
-        const { cmd, extraArgs } = commands[index];
-        let child;
-        let hasWritten = false;
-
-        try {
-          child = spawn(cmd, [...extraArgs, ...pipeArgs]);
-        } catch (e) {
-          return tryPipe(index + 1);
-        }
-
-        child.stdout.on('data', (chunk) => {
-          hasWritten = true;
-          res.write(chunk);
-        });
-
-        child.on('error', () => {
-          if (!hasWritten) tryPipe(index + 1);
-        });
-
-        child.on('close', (exitCode) => {
-          if (!hasWritten && exitCode !== 0) {
-            return tryPipe(index + 1);
-          }
-          res.end();
-        });
-
-        req.on('close', () => {
-          try { child.kill(); } catch (e) {}
-        });
+        return;
       }
 
-      tryPipe(0);
-    });
+      const { cmd, extraArgs } = commands[index];
+      let child;
+      let hasWritten = false;
+
+      try {
+        child = spawn(cmd, [...extraArgs, ...pipeArgs]);
+      } catch (e) {
+        return tryPipe(index + 1);
+      }
+
+      child.stdout.on('data', (chunk) => {
+        hasWritten = true;
+        res.write(chunk);
+      });
+
+      child.on('error', () => {
+        if (!hasWritten) tryPipe(index + 1);
+      });
+
+      child.on('close', (exitCode) => {
+        if (!hasWritten && exitCode !== 0) {
+          return tryPipe(index + 1);
+        }
+        res.end();
+      });
+
+      req.on('close', () => {
+        try { child.kill(); } catch (e) {}
+      });
+    }
+
+    tryPipe(0);
   });
 });
 
