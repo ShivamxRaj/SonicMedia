@@ -10,6 +10,9 @@ import ProSubscriptionModal from './components/ProSubscriptionModal';
 import DeveloperApiPortal from './components/DeveloperApiPortal';
 import FeaturesSection from './components/FeaturesSection';
 import Footer from './components/Footer';
+import TermsModal from './components/TermsModal';
+import PrivacyModal from './components/PrivacyModal';
+import DmcaModal from './components/DmcaModal';
 
 export default function App() {
   const [url, setUrl] = useState('');
@@ -21,6 +24,9 @@ export default function App() {
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
   const [isProModalOpen, setIsProModalOpen] = useState(false);
   const [isApiModalOpen, setIsApiModalOpen] = useState(false);
+  const [isTermsOpen, setIsTermsOpen] = useState(false);
+  const [isPrivacyOpen, setIsPrivacyOpen] = useState(false);
+  const [isDmcaOpen, setIsDmcaOpen] = useState(false);
   const [isPro, setIsPro] = useState(false);
 
   // Load state safely from localStorage
@@ -62,12 +68,11 @@ export default function App() {
     } catch (e) {}
   };
 
-  // Universal Bulletproof URL Extractor (YouTube, Instagram, TikTok, Twitter/X, SoundCloud, Facebook)
+  // Universal Bulletproof URL Extractor
   const extractValidMediaUrl = (input) => {
     if (!input || typeof input !== 'string') return null;
 
     let raw = input.trim();
-    // Cut off if second http/https exists in glued string
     const secondHttp = raw.indexOf('http', 8);
     if (secondHttp !== -1) {
       raw = raw.substring(0, secondHttp);
@@ -96,9 +101,7 @@ export default function App() {
       return;
     }
 
-    // Auto-fix input field to clean URL
     setUrl(cleanUrl);
-
     setLoading(true);
     setError(null);
     setMedia(null);
@@ -187,7 +190,11 @@ export default function App() {
         <FeaturesSection />
       </main>
 
-      <Footer />
+      <Footer
+        onOpenTerms={() => setIsTermsOpen(true)}
+        onOpenPrivacy={() => setIsPrivacyOpen(true)}
+        onOpenDmca={() => setIsDmcaOpen(true)}
+      />
 
       {previewMedia && (
         <InAppPlayer
@@ -214,6 +221,21 @@ export default function App() {
       <DeveloperApiPortal
         isOpen={isApiModalOpen}
         onClose={() => setIsApiModalOpen(false)}
+      />
+
+      <TermsModal
+        isOpen={isTermsOpen}
+        onClose={() => setIsTermsOpen(false)}
+      />
+
+      <PrivacyModal
+        isOpen={isPrivacyOpen}
+        onClose={() => setIsPrivacyOpen(false)}
+      />
+
+      <DmcaModal
+        isOpen={isDmcaOpen}
+        onClose={() => setIsDmcaOpen(false)}
       />
     </div>
   );
