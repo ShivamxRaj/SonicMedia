@@ -244,47 +244,25 @@ function answerTelegramCallback(callbackQueryId, text) {
 // Start Telegram Polling loop
 pollTelegramUpdates();
 
-// Global cached working executable for ultra-fast < 1.0s response
-let CACHED_YTDLP_CMD = null;
+// Priority strategy list with Render virtualenv paths first
+function getStrategyList(downloadedBin) {
+  const list = [];
+  if (downloadedBin && fs.existsSync(downloadedBin)) {
+    list.push({ cmd: downloadedBin, extraArgs: [] });
+  }
+  list.push(
+    { cmd: '/opt/render/project/src/.venv/bin/yt-dlp', extraArgs: [] },
+    { cmd: '/opt/render/project/src/.venv/bin/python', extraArgs: ['-m', 'yt_dlp'] },
+    { cmd: 'yt-dlp', extraArgs: [] },
+    { cmd: 'python3', extraArgs: ['-m', 'yt_dlp'] },
+    { cmd: 'python', extraArgs: ['-m', 'yt_dlp'] }
+  );
+  return list;
+}
 
 function runYtDlp(args, callback) {
-  if (CACHED_YTDLP_CMD) {
-    const { cmd, extraArgs } = CACHED_YTDLP_CMD;
-    let py = spawn(cmd, [...extraArgs, ...args]);
-    let stdoutData = '';
-    let stderrData = '';
-    let handled = false;
-
-    py.on('error', () => {
-      if (!handled) {
-        handled = true;
-        CACHED_YTDLP_CMD = null;
-        runYtDlp(args, callback);
-      }
-    });
-
-    py.stdout.on('data', d => stdoutData += d.toString());
-    py.stderr.on('data', d => stderrData += d.toString());
-
-    py.on('close', (code) => {
-      if (handled) return;
-      handled = true;
-      return callback(code, stdoutData, stderrData);
-    });
-    return;
-  }
-
   ensureYtDlpBinary((downloadedBin) => {
-    const commands = [];
-    if (downloadedBin && fs.existsSync(downloadedBin)) {
-      commands.push({ cmd: downloadedBin, extraArgs: [] });
-    }
-    commands.push(
-      { cmd: 'yt-dlp', extraArgs: [] },
-      { cmd: '/opt/render/project/src/.venv/bin/yt-dlp', extraArgs: [] },
-      { cmd: 'python3', extraArgs: ['-m', 'yt_dlp'] },
-      { cmd: 'python', extraArgs: ['-m', 'yt_dlp'] }
-    );
+    const commands = getStrategyList(downloadedBin);
 
     function tryCommand(index) {
       if (index >= commands.length) {
@@ -320,8 +298,6 @@ function runYtDlp(args, callback) {
         if (handled) return;
         if (code === 0 && stdoutData) {
           handled = true;
-          CACHED_YTDLP_CMD = { cmd, extraArgs };
-          console.log(`⚡ Cached working yt-dlp executable: ${cmd}`);
           return callback(0, stdoutData, stderrData);
         }
         handled = true;
@@ -623,16 +599,7 @@ app.get('/api/download', (req, res) => {
     res.setHeader('Content-Type', type === 'audio' ? 'audio/mpeg' : 'video/mp4');
 
     ensureYtDlpBinary((binPath) => {
-      const commands = [];
-      if (binPath && fs.existsSync(binPath)) {
-        commands.push({ cmd: binPath, extraArgs: [] });
-      }
-      commands.push(
-        { cmd: 'yt-dlp', extraArgs: [] },
-        { cmd: '/opt/render/project/src/.venv/bin/yt-dlp', extraArgs: [] },
-        { cmd: 'python3', extraArgs: ['-m', 'yt_dlp'] },
-        { cmd: 'python', extraArgs: ['-m', 'yt_dlp'] }
-      );
+      const commands = getStrategyList(binPath);
 
       const pipeArgs = [
         '-o', '-',
