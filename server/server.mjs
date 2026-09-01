@@ -477,38 +477,113 @@ app.get('/api/info', async (req, res) => {
   });
 });
 
-// Stream Download Handler API with Direct High-Speed CDN Acceleration
+// Stream Download Handler API with 3-Layer Fail-Safe Guarantee
 app.get('/api/download', (req, res) => {
-  const { url, type, quality } = req.query;
+  const { url, type, quality, title } = req.query;
 
-  const match = (url || '').match(/(https?:\/\/[^\s]+)/i);
+  let rawUrl = (url || '').trim();
+  const secondHttp = rawUrl.indexOf('http', 8);
+  if (secondHttp !== -1) {
+    rawUrl = rawUrl.substring(0, secondHttp);
+  }
+
+  const match = rawUrl.match(/(https?:\/\/[^\s>]+)/i);
   const cleanUrl = match ? match[0] : null;
 
   if (!cleanUrl) {
-    return res.status(400).send('URL is required');
+    return res.status(400).send('⚠️ Valid video or music URL is required.');
   }
 
-  const args = ['-g', '--force-ipv4', '--socket-timeout', '10'];
+  const cleanTitle = (title || 'sonicmedia-download').replace(/[^a-zA-Z0-9_-]/g, '_');
+  const ext = type === 'audio' ? 'mp3' : 'mp4';
+  const filename = `${cleanTitle}.${ext}`;
 
+  console.log(`[API /download] Requesting [${type}] download for: ${cleanUrl}`);
+
+  // Layer 1: Try Direct CDN URL (-g) with versatile formats
+  const gArgs = ['-g', '--force-ipv4', '--socket-timeout', '8', '--no-warnings', '--no-playlist'];
   if (type === 'audio') {
-    args.push('-f', 'ba/b');
+    gArgs.push('-f', 'ba/b');
   } else {
-    args.push('-f', 'b/bv*+ba/best');
+    gArgs.push('-f', 'b/18/22/best');
   }
+  gArgs.push(cleanUrl);
 
-  args.push(cleanUrl);
-
-  runYtDlp(args, (code, stdoutData) => {
+  runYtDlp(gArgs, (code, stdoutData) => {
     if (code === 0 && stdoutData) {
       const cdnUrls = stdoutData.trim().split('\n').filter(Boolean);
       const directCdnUrl = cdnUrls[0];
       if (directCdnUrl && directCdnUrl.startsWith('http')) {
-        console.log(`⚡ Direct CDN Stream Found for [${type}]: ${directCdnUrl.substring(0, 60)}...`);
+        console.log(`⚡ [Layer 1] Direct CDN Stream Found! Redirecting...`);
         return res.redirect(directCdnUrl);
       }
     }
 
-    res.status(400).send('⚠️ Could not generate download stream. Please check link and try again.');
+    console.log(`⚠️ [Layer 1] -g yielded no URL. Falling back to Layer 2 stdout pipe stream...`);
+
+    // Layer 2: Stdout Pipe Stream (-o -) with --no-part
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Type', type === 'audio' ? 'audio/mpeg' : 'video/mp4');
+
+    ensureYtDlpBinary((binPath) => {
+      const commands = [];
+      if (binPath && fs.existsSync(binPath)) {
+        commands.push({ cmd: binPath, extraArgs: [] });
+      }
+      commands.push(
+        { cmd: 'yt-dlp', extraArgs: [] },
+        { cmd: 'python3', extraArgs: ['-m', 'yt_dlp'] },
+        { cmd: 'python', extraArgs: ['-m', 'yt_dlp'] },
+        { cmd: '/opt/render/project/src/.venv/bin/yt-dlp', extraArgs: [] }
+      );
+
+      const pipeArgs = ['-o', '-', '--no-part', '--force-ipv4', '--socket-timeout', '15', '--no-warnings', '--no-playlist'];
+      if (type === 'audio') {
+        pipeArgs.push('-f', 'ba/b');
+      } else {
+        pipeArgs.push('-f', 'b/18/22/best');
+      }
+      pipeArgs.push(cleanUrl);
+
+      function tryPipe(index) {
+        if (index >= commands.length) {
+          console.error(`❌ [Layer 2] All pipe commands failed. Redirecting to cleanUrl.`);
+          return res.redirect(cleanUrl);
+        }
+
+        const { cmd, extraArgs } = commands[index];
+        let child;
+        let hasWritten = false;
+
+        try {
+          child = spawn(cmd, [...extraArgs, ...pipeArgs]);
+        } catch (e) {
+          return tryPipe(index + 1);
+        }
+
+        child.stdout.on('data', (chunk) => {
+          hasWritten = true;
+          res.write(chunk);
+        });
+
+        child.on('error', () => {
+          if (!hasWritten) tryPipe(index + 1);
+        });
+
+        child.on('close', (exitCode) => {
+          if (!hasWritten && exitCode !== 0) {
+            return tryPipe(index + 1);
+          }
+          res.end();
+        });
+
+        req.on('close', () => {
+          try { child.kill(); } catch (e) {}
+        });
+      }
+
+      tryPipe(0);
+    });
   });
 });
 
