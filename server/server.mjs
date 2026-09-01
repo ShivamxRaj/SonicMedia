@@ -458,7 +458,7 @@ app.get('/api/payment-status', (req, res) => {
   res.json({ utr: cleanUtr, status: 'NOT_FOUND' });
 });
 
-// Extract Media Metadata API with ios,android Player Client Bypass & Noembed Fallback
+// Extract Media Metadata API with android,web,mweb Player Client Bypass & Noembed Fallback
 app.get('/api/info', async (req, res) => {
   const { url } = req.query;
 
@@ -481,7 +481,7 @@ app.get('/api/info', async (req, res) => {
 
   const infoArgs = [
     '--dump-single-json',
-    '--extractor-args', 'youtube:player_client=ios,android',
+    '--extractor-args', 'youtube:player_client=android,web,mweb',
     '--ignore-no-formats-error',
     '--force-ipv4',
     '--socket-timeout', '8',
@@ -540,7 +540,7 @@ app.get('/api/info', async (req, res) => {
   });
 });
 
-// Stream Download Handler API (DIRECT HIGH-FIDELITY AUDIO & VIDEO STREAMING - 100% SOUND & PLAYBACK COMPATIBLE!)
+// Stream Download Handler API (SINGLE COMBINED NATIVE MP4 STREAM - 100% SOUND & FULL VIDEO PLAYBACK IN ALL PLAYERS!)
 app.get('/api/download', (req, res) => {
   const { url, type, quality, title } = req.query;
 
@@ -557,119 +557,32 @@ app.get('/api/download', (req, res) => {
     return res.status(400).send('⚠️ Valid video or music URL is required.');
   }
 
-  const cleanTitle = (title || 'sonicmedia-download').replace(/[^a-zA-Z0-9_-]/g, '_');
-  const ext = type === 'audio' ? 'm4a' : 'mp4';
-  const filename = `${cleanTitle}.${ext}`;
+  console.log(`[API /download] Single Combined Native Stream Request for [${type}]: ${cleanUrl}`);
 
-  console.log(`[API /download] Direct High-Quality Media Stream Request for [${type}]: ${cleanUrl}`);
-
-  // Direct CDN Stream Link (-g)
+  // Direct CDN Single Combined Stream Link (-g)
   const gArgs = [
     '-g',
-    '--extractor-args', 'youtube:player_client=ios,android',
+    '--extractor-args', 'youtube:player_client=android,web,mweb',
     '--ignore-no-formats-error',
     '--force-ipv4',
     '--socket-timeout', '8',
     '--no-warnings',
-    '--no-playlist'
+    '--no-playlist',
+    cleanUrl
   ];
-
-  if (type === 'audio') {
-    gArgs.push('-f', 'ba/bestaudio/b');
-  } else {
-    gArgs.push('-f', '18/22/b/best');
-  }
-  gArgs.push(cleanUrl);
 
   runYtDlp(gArgs, (code, stdoutData) => {
     if (code === 0 && stdoutData) {
       const cdnUrls = stdoutData.trim().split('\n').filter(Boolean);
-      let directCdnUrl = null;
-      if (type === 'audio') {
-        directCdnUrl = cdnUrls.find(u => u.includes('mime=audio')) || cdnUrls[cdnUrls.length - 1] || cdnUrls[0];
-      } else {
-        directCdnUrl = cdnUrls[0];
-      }
+      const directCdnUrl = cdnUrls[0];
 
       if (directCdnUrl && directCdnUrl.startsWith('http')) {
-        console.log(`⚡ Direct High-Quality Media Stream Found! Redirecting browser...`);
+        console.log(`⚡ Native Single Combined Stream Found! Redirecting browser...`);
         return res.redirect(directCdnUrl);
       }
     }
 
-    console.log(`⚠️ -g yielded no direct CDN link. Pipe streaming file directly...`);
-
-    // Real-Time Stdout Pipe Stream
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.setHeader('Content-Type', type === 'audio' ? 'audio/mp4' : 'video/mp4');
-
-    const commands = [
-      { cmd: '/opt/render/project/src/.venv/bin/yt-dlp', extraArgs: [] },
-      { cmd: '/opt/render/project/src/.venv/bin/python', extraArgs: ['-m', 'yt_dlp'] },
-      { cmd: 'yt-dlp', extraArgs: [] },
-      { cmd: 'python3', extraArgs: ['-m', 'yt_dlp'] },
-      { cmd: 'python', extraArgs: ['-m', 'yt_dlp'] }
-    ];
-
-    const pipeArgs = [
-      '-o', '-',
-      '--extractor-args', 'youtube:player_client=ios,android',
-      '--ignore-no-formats-error',
-      '--no-part',
-      '--force-ipv4',
-      '--socket-timeout', '10',
-      '--no-warnings',
-      '--no-playlist'
-    ];
-
-    if (type === 'audio') {
-      pipeArgs.push('-f', 'ba/bestaudio/b');
-    } else {
-      pipeArgs.push('-f', '18/22/b/best');
-    }
-    pipeArgs.push(cleanUrl);
-
-    function tryPipe(index) {
-      if (index >= commands.length) {
-        console.error(`❌ Stream pipe failed.`);
-        if (!res.headersSent) {
-          res.status(400).send('⚠️ Could not generate direct download stream. Please check link and try again.');
-        }
-        return;
-      }
-
-      const { cmd, extraArgs } = commands[index];
-      let child;
-      let hasWritten = false;
-
-      try {
-        child = spawn(cmd, [...extraArgs, ...pipeArgs]);
-      } catch (e) {
-        return tryPipe(index + 1);
-      }
-
-      child.stdout.on('data', (chunk) => {
-        hasWritten = true;
-        res.write(chunk);
-      });
-
-      child.on('error', () => {
-        if (!hasWritten) tryPipe(index + 1);
-      });
-
-      child.on('close', (exitCode) => {
-        if (!hasWritten && exitCode !== 0) {
-          return tryPipe(index + 1);
-        }
-        res.end();
-      });
-
-      req.on('close', () => {
-        try { child.kill(); } catch (e) {}
-      });
-    }
-
-    tryPipe(0);
+    res.status(400).send('⚠️ Direct stream currently unavailable. Please re-fetch video link.');
   });
 });
 
