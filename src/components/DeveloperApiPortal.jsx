@@ -10,12 +10,12 @@ export default function DeveloperApiPortal({ isOpen, onClose }) {
   if (!isOpen) return null;
 
   const codeSnippets = {
-    curl: `curl -X GET "http://localhost:5000/api/info?url=https://www.youtube.com/watch?v=dQw4w9WgXcQ" \\
+    curl: `curl -X GET "https://sonicmedia.me/api/info?url=https://www.youtube.com/watch?v=dQw4w9WgXcQ" \\
   -H "Authorization: Bearer ${apiKey}"`,
     js: `// Node.js / JavaScript Axios Integration
 import axios from 'axios';
 
-const response = await axios.get('http://localhost:5000/api/info', {
+const response = await axios.get('https://sonicmedia.me/api/info', {
   params: { url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' },
   headers: { 'Authorization': 'Bearer ${apiKey}' }
 });
@@ -24,7 +24,7 @@ console.log('Media Info:', response.data);`,
     python: `# Python Requests Integration
 import requests
 
-url = "http://localhost:5000/api/info"
+url = "https://sonicmedia.me/api/info"
 params = {"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}
 headers = {"Authorization": "Bearer ${apiKey}"}
 
