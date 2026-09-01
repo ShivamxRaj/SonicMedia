@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import { spawn, execSync } from 'child_process';
+import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import https from 'https';
@@ -477,9 +477,9 @@ app.get('/api/info', async (req, res) => {
   });
 });
 
-// Stream Download Handler API with Real-time Pipe Streaming to Express res
+// Stream Download Handler API with Direct High-Speed CDN Acceleration
 app.get('/api/download', (req, res) => {
-  const { url, type, quality, title } = req.query;
+  const { url, type, quality } = req.query;
 
   const match = (url || '').match(/(https?:\/\/[^\s]+)/i);
   const cleanUrl = match ? match[0] : null;
@@ -488,79 +488,27 @@ app.get('/api/download', (req, res) => {
     return res.status(400).send('URL is required');
   }
 
-  const cleanTitle = (title || 'sonicmedia-download').replace(/[^a-zA-Z0-9_-]/g, '_');
-  const ext = type === 'audio' ? 'mp3' : 'mp4';
-  const filename = `${cleanTitle}.${ext}`;
+  const args = ['-g', '--force-ipv4', '--socket-timeout', '10'];
 
-  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-  res.setHeader('Content-Type', type === 'audio' ? 'audio/mpeg' : 'video/mp4');
+  if (type === 'audio') {
+    args.push('-f', 'ba/b');
+  } else {
+    args.push('-f', 'b/bv*+ba/best');
+  }
 
-  ensureYtDlpBinary((downloadedBin) => {
-    const commands = [];
-    if (downloadedBin && fs.existsSync(downloadedBin)) {
-      commands.push({ cmd: downloadedBin, extraArgs: [] });
-    }
-    commands.push(
-      { cmd: 'yt-dlp', extraArgs: [] },
-      { cmd: 'python3', extraArgs: ['-m', 'yt_dlp'] },
-      { cmd: 'python', extraArgs: ['-m', 'yt_dlp'] },
-      { cmd: '/opt/render/project/src/.venv/bin/yt-dlp', extraArgs: [] }
-    );
+  args.push(cleanUrl);
 
-    const args = ['-o', '-', '--force-ipv4', '--socket-timeout', '15'];
-
-    if (type === 'audio') {
-      args.push('-f', 'ba/b');
-    } else {
-      if (quality === '2160p' || quality === 'mp4-4k') {
-        args.push('-f', 'bv*+ba/best');
-      } else {
-        args.push('-f', 'b/bv*+ba/best');
+  runYtDlp(args, (code, stdoutData) => {
+    if (code === 0 && stdoutData) {
+      const cdnUrls = stdoutData.trim().split('\n').filter(Boolean);
+      const directCdnUrl = cdnUrls[0];
+      if (directCdnUrl && directCdnUrl.startsWith('http')) {
+        console.log(`⚡ Direct CDN Stream Found for [${type}]: ${directCdnUrl.substring(0, 60)}...`);
+        return res.redirect(directCdnUrl);
       }
     }
-    
-    args.push(cleanUrl);
 
-    function tryStream(index) {
-      if (index >= commands.length) {
-        if (!res.headersSent) res.status(500).send('Download failed');
-        return;
-      }
-
-      const { cmd, extraArgs } = commands[index];
-      const fullArgs = [...extraArgs, ...args];
-
-      let child;
-      let hasData = false;
-
-      try {
-        child = spawn(cmd, fullArgs);
-      } catch (e) {
-        return tryStream(index + 1);
-      }
-
-      child.stdout.on('data', (chunk) => {
-        hasData = true;
-        res.write(chunk);
-      });
-
-      child.on('error', () => {
-        if (!hasData) tryStream(index + 1);
-      });
-
-      child.on('close', (code) => {
-        if (!hasData && code !== 0) {
-          return tryStream(index + 1);
-        }
-        res.end();
-      });
-
-      req.on('close', () => {
-        try { child.kill(); } catch (e) {}
-      });
-    }
-
-    tryStream(0);
+    res.status(400).send('⚠️ Could not generate download stream. Please check link and try again.');
   });
 });
 
