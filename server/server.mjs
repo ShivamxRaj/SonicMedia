@@ -488,9 +488,9 @@ app.get('/api/info', async (req, res) => {
   const infoArgs = [
     '--dump-single-json',
     '--extractor-args', 'youtube:player_client=android,web',
+    '--ignore-no-formats-error',
     '--force-ipv4',
     '--socket-timeout', '8',
-    '--ignore-no-formats-error',
     '--no-warnings',
     '--no-playlist',
     cleanUrl
@@ -570,8 +570,9 @@ app.get('/api/download', (req, res) => {
   const gArgs = [
     '-g',
     '--extractor-args', 'youtube:player_client=android,web',
+    '--ignore-no-formats-error',
     '--force-ipv4',
-    '--socket-timeout', '6',
+    '--socket-timeout', '8',
     '--no-warnings',
     '--no-playlist'
   ];
@@ -587,7 +588,7 @@ app.get('/api/download', (req, res) => {
       const cdnUrls = stdoutData.trim().split('\n').filter(Boolean);
       const directCdnUrl = cdnUrls[0];
       if (directCdnUrl && directCdnUrl.startsWith('http')) {
-        console.log(`⚡ Direct CDN Stream Found! Redirecting browser...`);
+        console.log(`⚡ Direct CDN Stream Found! Redirecting browser to direct download stream...`);
         return res.redirect(directCdnUrl);
       }
     }
@@ -604,6 +605,7 @@ app.get('/api/download', (req, res) => {
       const pipeArgs = [
         '-o', '-',
         '--extractor-args', 'youtube:player_client=android,web',
+        '--ignore-no-formats-error',
         '--no-part',
         '--force-ipv4',
         '--socket-timeout', '10',
