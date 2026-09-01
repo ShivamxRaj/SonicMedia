@@ -1,0 +1,217 @@
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import Navbar from './components/Navbar';
+import HeroSection from './components/HeroSection';
+import MediaCard from './components/MediaCard';
+import InAppPlayer from './components/InAppPlayer';
+import DownloadHistory from './components/DownloadHistory';
+import BatchQueueModal from './components/BatchQueueModal';
+import ProSubscriptionModal from './components/ProSubscriptionModal';
+import DeveloperApiPortal from './components/DeveloperApiPortal';
+import FeaturesSection from './components/FeaturesSection';
+import Footer from './components/Footer';
+
+export default function App() {
+  const [url, setUrl] = useState('');
+  const [media, setMedia] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [previewMedia, setPreviewMedia] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
+  const [isProModalOpen, setIsProModalOpen] = useState(false);
+  const [isApiModalOpen, setIsApiModalOpen] = useState(false);
+  const [isPro, setIsPro] = useState(false);
+
+  // Load state safely from localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('sonicmedia_history');
+      if (saved && saved !== 'undefined') {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          setHistory(parsed);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to parse history', e);
+      setHistory([]);
+    }
+
+    try {
+      const savedPro = localStorage.getItem('sonicmedia_pro');
+      if (savedPro === 'true') {
+        setIsPro(true);
+      }
+    } catch (e) {}
+  }, []);
+
+  const saveHistory = (newHistory) => {
+    setHistory(newHistory);
+    try {
+      localStorage.setItem('sonicmedia_history', JSON.stringify(newHistory));
+    } catch (e) {
+      console.error('Failed to save history', e);
+    }
+  };
+
+  const handleActivatePro = (key) => {
+    setIsPro(true);
+    try {
+      localStorage.setItem('sonicmedia_pro', 'true');
+    } catch (e) {}
+  };
+
+  // Smart URL extraction & domain check (auto-strips leading/trailing junk text)
+  const extractValidMediaUrl = (input) => {
+    if (!input || typeof input !== 'string') return null;
+    const match = input.match(/(https?:\/\/[^\s]+)/i);
+    if (!match) return null;
+
+    const cleanUrl = match[0];
+    const lower = cleanUrl.toLowerCase();
+    const supportedDomains = [
+      'youtube.com', 'youtu.be', 'instagram.com', 'tiktok.com',
+      'twitter.com', 'x.com', 'facebook.com', 'fb.watch', 'soundcloud.com', 'spotify.com'
+    ];
+
+    if (supportedDomains.some((domain) => lower.includes(domain))) {
+      return cleanUrl;
+    }
+    return null;
+  };
+
+  // Analyze URL via Backend API
+  const handleAnalyze = async (targetUrl) => {
+    const rawInput = (targetUrl || url).trim();
+    if (!rawInput) return;
+
+    const cleanUrl = extractValidMediaUrl(rawInput);
+
+    if (!cleanUrl) {
+      setMedia(null);
+      setError('Invalid link');
+      return;
+    }
+
+    // Auto-fix input field to clean URL
+    setUrl(cleanUrl);
+
+    setLoading(true);
+    setError(null);
+    setMedia(null);
+
+    try {
+      const response = await axios.get(`/api/info?url=${encodeURIComponent(cleanUrl)}`);
+      if (response.data && response.data.title) {
+        setMedia(response.data);
+      } else {
+        setMedia(null);
+        setError('Link not found');
+      }
+    } catch (err) {
+      console.error('API Error:', err);
+      setMedia(null);
+      setError('Invalid link');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Trigger File Download Stream & Log History
+  const handleDownload = (item) => {
+    const downloadUrl = `/api/download?url=${encodeURIComponent(item.url)}&type=${item.type}&quality=${item.quality}&title=${encodeURIComponent(item.title)}`;
+    
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = `${item.title}.${item.type === 'audio' ? 'mp3' : 'mp4'}`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    const historyItem = {
+      title: item.title,
+      uploader: item.uploader,
+      url: item.url,
+      type: item.type,
+      quality: item.quality,
+      formatLabel: item.formatLabel,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+
+    const updated = [historyItem, ...history.slice(0, 9)];
+    saveHistory(updated);
+  };
+
+  const handleClearHistory = () => {
+    saveHistory([]);
+  };
+
+  return (
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <div className="bg-pattern" />
+      <Navbar
+        onOpenBatchModal={() => setIsBatchModalOpen(true)}
+        onOpenProModal={() => setIsProModalOpen(true)}
+        onOpenApiModal={() => setIsApiModalOpen(true)}
+        isPro={isPro}
+      />
+
+      <main style={{ flex: 1 }}>
+        <HeroSection
+          url={url}
+          setUrl={setUrl}
+          onAnalyze={handleAnalyze}
+          loading={loading}
+          error={error}
+          onOpenBatchModal={() => setIsBatchModalOpen(true)}
+        />
+
+        <MediaCard
+          media={media}
+          onDownload={handleDownload}
+          onPreview={(m) => setPreviewMedia(m)}
+          isPro={isPro}
+          onOpenProModal={() => setIsProModalOpen(true)}
+        />
+
+        <DownloadHistory
+          history={history}
+          onClearHistory={handleClearHistory}
+          onReDownload={handleDownload}
+        />
+
+        <FeaturesSection />
+      </main>
+
+      <Footer />
+
+      {previewMedia && (
+        <InAppPlayer
+          media={previewMedia}
+          onClose={() => setPreviewMedia(null)}
+        />
+      )}
+
+      <BatchQueueModal
+        isOpen={isBatchModalOpen}
+        onClose={() => setIsBatchModalOpen(false)}
+        onProcessBatch={handleDownload}
+        isPro={isPro}
+        onOpenProModal={() => setIsProModalOpen(true)}
+      />
+
+      <ProSubscriptionModal
+        isOpen={isProModalOpen}
+        onClose={() => setIsProModalOpen(false)}
+        isPro={isPro}
+        onActivatePro={handleActivatePro}
+      />
+
+      <DeveloperApiPortal
+        isOpen={isApiModalOpen}
+        onClose={() => setIsApiModalOpen(false)}
+      />
+    </div>
+  );
+}
