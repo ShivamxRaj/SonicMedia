@@ -319,19 +319,34 @@ app.get('/api/payment-status', (req, res) => {
   res.json({ utr: cleanUtr, status: 'NOT_FOUND' });
 });
 
-// Extract Media Metadata API
+// Extract Media Metadata API with Smart URL Cleaner & Error Classifier
 app.get('/api/info', async (req, res) => {
   const { url } = req.query;
-  const match = (url || '').match(/(https?:\/\/[^\s]+)/i);
-  const cleanUrl = match ? match[0] : null;
+
+  // Clean trailing glued text or params
+  let rawUrl = (url || '').trim();
+  
+  // If multiple http/https are glued, cut off at second "http"
+  const secondHttp = rawUrl.indexOf('http', 8);
+  if (secondHttp !== -1) {
+    rawUrl = rawUrl.substring(0, secondHttp);
+  }
+
+  const match = rawUrl.match(/(https?:\/\/[^\s]+)/i);
+  let cleanUrl = match ? match[0] : null;
+
+  if (cleanUrl) {
+    // Strip trailing fragment text like glued "htt"
+    cleanUrl = cleanUrl.replace(/(htt|http|https)$/i, '').replace(/[\s\W]+$/, '');
+  }
 
   if (!cleanUrl) {
-    return res.status(400).json({ error: '⚠️ Invalid Link! Please paste a valid video or track link.' });
+    return res.status(400).json({ error: '⚠️ Invalid link! Please paste a valid video or track URL.' });
   }
 
   const platform = detectPlatform(cleanUrl);
   if (!platform) {
-    return res.status(400).json({ error: '⚠️ Unsupported Link! Please paste a video or music link.' });
+    return res.status(400).json({ error: '⚠️ Unsupported link! Please paste a YouTube, Instagram, or TikTok link.' });
   }
 
   console.log(`[API /info] Extracting metadata for: ${cleanUrl}`);
@@ -351,7 +366,14 @@ app.get('/api/info', async (req, res) => {
 
     py.on('close', (code) => {
       if (code !== 0 || !stdoutData) {
-        return res.status(400).json({ error: '⚠️ Link not found! Check the link and try again.' });
+        const isBotFlagged = stderrData.includes('Sign in') || stderrData.includes('confirm you') || stderrData.includes('bot');
+        const isAgeRestricted = stderrData.includes('age') || stderrData.includes('restricted');
+        
+        if (isBotFlagged || isAgeRestricted) {
+          return res.status(400).json({ error: '⚠️ This specific YouTube video requires login/age verification. Please try another video or song link!' });
+        }
+
+        return res.status(400).json({ error: '⚠️ Link not found! Please check the video link and try again.' });
       }
 
       try {
@@ -384,7 +406,7 @@ app.get('/api/info', async (req, res) => {
 
         return res.json(response);
       } catch (err) {
-        return res.status(400).json({ error: '⚠️ Could not read link.' });
+        return res.status(400).json({ error: '⚠️ Could not read video link.' });
       }
     });
   } catch (e) {
