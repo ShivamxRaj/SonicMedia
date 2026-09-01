@@ -464,7 +464,7 @@ app.get('/api/payment-status', (req, res) => {
   res.json({ utr: cleanUtr, status: 'NOT_FOUND' });
 });
 
-// Extract Media Metadata API with android,web Player Client Bypass & Noembed Fallback
+// Extract Media Metadata API with direct CDN stream links inside formats
 app.get('/api/info', async (req, res) => {
   const { url } = req.query;
 
@@ -483,7 +483,7 @@ app.get('/api/info', async (req, res) => {
 
   const platform = detectPlatform(cleanUrl);
 
-  console.log(`[API /info] Extracting metadata for [${platform.name}]: ${cleanUrl}`);
+  console.log(`[API /info] Extracting metadata & direct CDN streams for [${platform.name}]: ${cleanUrl}`);
 
   const infoArgs = [
     '--dump-single-json',
@@ -508,6 +508,22 @@ app.get('/api/info', async (req, res) => {
     try {
       const info = JSON.parse(stdoutData);
 
+      // Extract direct CDN stream URLs from formats array
+      let directAudioUrl = null;
+      let directVideoUrl = null;
+
+      if (info.url && info.url.startsWith('http')) {
+        directVideoUrl = info.url;
+        directAudioUrl = info.url;
+      }
+
+      if (info.formats && Array.isArray(info.formats)) {
+        const audioFmt = info.formats.slice().reverse().find(f => f.acodec !== 'none' && f.url && f.url.startsWith('http'));
+        const videoFmt = info.formats.slice().reverse().find(f => f.vcodec !== 'none' && f.url && f.url.startsWith('http'));
+        if (audioFmt) directAudioUrl = audioFmt.url;
+        if (videoFmt) directVideoUrl = videoFmt.url;
+      }
+
       const response = {
         title: info.title || 'Social Media Video',
         uploader: info.uploader || info.channel || info.artist || `${platform.name} Author`,
@@ -519,16 +535,16 @@ app.get('/api/info', async (req, res) => {
         views: info.view_count ? info.view_count.toLocaleString() : 'N/A',
         formats: {
           audio: [
-            { label: 'MP3 Ultra HD (320 kbps)', bitrate: '320k', size: '~8.5 MB', format_id: 'mp3-320' },
-            { label: 'MP3 High Quality (256 kbps)', bitrate: '256k', size: '~6.2 MB', format_id: 'mp3-256' },
-            { label: 'MP3 Standard (128 kbps)', bitrate: '128k', size: '~3.4 MB', format_id: 'mp3-128' },
-            { label: 'M4A Original Stream', bitrate: 'm4a', size: '~5.1 MB', format_id: 'mp3-128' }
+            { label: 'MP3 Ultra HD (320 kbps)', bitrate: '320k', size: '~8.5 MB', format_id: 'mp3-320', download_url: directAudioUrl },
+            { label: 'MP3 High Quality (256 kbps)', bitrate: '256k', size: '~6.2 MB', format_id: 'mp3-256', download_url: directAudioUrl },
+            { label: 'MP3 Standard (128 kbps)', bitrate: '128k', size: '~3.4 MB', format_id: 'mp3-128', download_url: directAudioUrl },
+            { label: 'M4A Original Stream', bitrate: 'm4a', size: '~5.1 MB', format_id: 'mp3-128', download_url: directAudioUrl }
           ],
           video: [
-            { label: 'MP4 4K Ultra HD (HDR Color Grade + Crisp Edge)', res: '2160p', size: '~120 MB', format_id: 'mp4-4k' },
-            { label: 'MP4 Full HD (1080p + Audio)', res: '1080p', size: '~45 MB', format_id: 'mp4-1080' },
-            { label: 'MP4 HD (720p + Audio)', res: '720p', size: '~22 MB', format_id: 'mp4-720' },
-            { label: 'MP4 SD (480p + Audio)', res: '480p', size: '~12 MB', format_id: 'mp4-480' }
+            { label: 'MP4 4K Ultra HD (HDR Color Grade + Crisp Edge)', res: '2160p', size: '~120 MB', format_id: 'mp4-4k', download_url: directVideoUrl },
+            { label: 'MP4 Full HD (1080p + Audio)', res: '1080p', size: '~45 MB', format_id: 'mp4-1080', download_url: directVideoUrl },
+            { label: 'MP4 HD (720p + Audio)', res: '720p', size: '~22 MB', format_id: 'mp4-720', download_url: directVideoUrl },
+            { label: 'MP4 SD (480p + Audio)', res: '480p', size: '~12 MB', format_id: 'mp4-480', download_url: directVideoUrl }
           ]
         }
       };
@@ -543,7 +559,7 @@ app.get('/api/info', async (req, res) => {
   });
 });
 
-// Stream Download Handler API with Direct High-Speed CDN Stream Redirection (NEVER redirect to YouTube.com!)
+// Stream Download Handler API with Direct High-Speed CDN Stream Redirection
 app.get('/api/download', (req, res) => {
   const { url, type, quality, title } = req.query;
 
@@ -559,10 +575,6 @@ app.get('/api/download', (req, res) => {
   if (!cleanUrl) {
     return res.status(400).send('⚠️ Valid video or music URL is required.');
   }
-
-  const cleanTitle = (title || 'sonicmedia-download').replace(/[^a-zA-Z0-9_-]/g, '_');
-  const ext = type === 'audio' ? 'mp3' : 'mp4';
-  const filename = `${cleanTitle}.${ext}`;
 
   console.log(`[API /download] Direct CDN Stream Request for [${type}]: ${cleanUrl}`);
 
@@ -588,79 +600,12 @@ app.get('/api/download', (req, res) => {
       const cdnUrls = stdoutData.trim().split('\n').filter(Boolean);
       const directCdnUrl = cdnUrls[0];
       if (directCdnUrl && directCdnUrl.startsWith('http')) {
-        console.log(`⚡ Direct CDN Stream Found! Redirecting browser to direct download stream...`);
+        console.log(`⚡ Direct CDN Stream Found! Redirecting browser to direct stream...`);
         return res.redirect(directCdnUrl);
       }
     }
 
-    console.log(`⚠️ -g yielded no CDN link. Pipe streaming file directly...`);
-
-    // Real-Time Stdout Pipe Stream (NEVER redirect to youtube.com website!)
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.setHeader('Content-Type', type === 'audio' ? 'audio/mpeg' : 'video/mp4');
-
-    ensureYtDlpBinary((binPath) => {
-      const commands = getStrategyList(binPath);
-
-      const pipeArgs = [
-        '-o', '-',
-        '--extractor-args', 'youtube:player_client=android,web',
-        '--ignore-no-formats-error',
-        '--no-part',
-        '--force-ipv4',
-        '--socket-timeout', '10',
-        '--no-warnings',
-        '--no-playlist'
-      ];
-      if (type === 'audio') {
-        pipeArgs.push('-f', 'ba/b');
-      } else {
-        pipeArgs.push('-f', 'b/18/22/best');
-      }
-      pipeArgs.push(cleanUrl);
-
-      function tryPipe(index) {
-        if (index >= commands.length) {
-          console.error(`❌ Stream pipe failed.`);
-          if (!res.headersSent) {
-            res.status(400).send('⚠️ Could not generate direct download stream. Please check link and try again.');
-          }
-          return;
-        }
-
-        const { cmd, extraArgs } = commands[index];
-        let child;
-        let hasWritten = false;
-
-        try {
-          child = spawn(cmd, [...extraArgs, ...pipeArgs]);
-        } catch (e) {
-          return tryPipe(index + 1);
-        }
-
-        child.stdout.on('data', (chunk) => {
-          hasWritten = true;
-          res.write(chunk);
-        });
-
-        child.on('error', () => {
-          if (!hasWritten) tryPipe(index + 1);
-        });
-
-        child.on('close', (exitCode) => {
-          if (!hasWritten && exitCode !== 0) {
-            return tryPipe(index + 1);
-          }
-          res.end();
-        });
-
-        req.on('close', () => {
-          try { child.kill(); } catch (e) {}
-        });
-      }
-
-      tryPipe(0);
-    });
+    return res.status(400).send('⚠️ Direct stream link expired or unavailable. Please re-fetch video.');
   });
 });
 
