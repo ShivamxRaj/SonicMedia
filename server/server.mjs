@@ -389,7 +389,7 @@ app.get('/api/info', async (req, res) => {
 
   console.log(`[API /info] Extracting metadata for [${platform.name}]: ${cleanUrl}`);
 
-  runYtDlp(['--dump-single-json', '--ignore-no-formats-error', '--no-warnings', '--no-playlist', cleanUrl], (code, stdoutData, stderrData) => {
+  runYtDlp(['--dump-single-json', '--force-ipv4', '--socket-timeout', '10', '--ignore-no-formats-error', '--no-warnings', '--no-playlist', cleanUrl], (code, stdoutData, stderrData) => {
     if (code !== 0 || !stdoutData) {
       console.error('yt-dlp stderr:', stderrData);
       return res.status(400).json({ error: '⚠️ Could not read video link. Please check the URL and try again.' });
@@ -448,7 +448,7 @@ app.get('/api/download', (req, res) => {
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
   res.setHeader('Content-Type', type === 'audio' ? 'audio/mpeg' : 'video/mp4');
 
-  const args = ['-o', '-'];
+  const args = ['-o', '-', '--force-ipv4', '--socket-timeout', '15'];
 
   if (type === 'audio') {
     args.push('-f', 'ba/b');
