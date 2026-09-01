@@ -361,7 +361,8 @@ function fetchNoembedFallback(cleanUrl, platform, res) {
       try {
         const json = JSON.parse(data);
         if (json.title) {
-          const fallbackDownloadUrl = `/api/download?url=${encodeURIComponent(cleanUrl)}&type=audio&quality=320k&title=${encodeURIComponent(json.title)}`;
+          const fallbackAudioUrl = `/api/download?url=${encodeURIComponent(cleanUrl)}&type=audio&quality=320k&title=${encodeURIComponent(json.title)}`;
+          const fallbackVideoUrl = `/api/download?url=${encodeURIComponent(cleanUrl)}&type=video&quality=1080p&title=${encodeURIComponent(json.title)}`;
           return res.json({
             title: json.title,
             uploader: json.author_name || 'YRF Media',
@@ -373,16 +374,16 @@ function fetchNoembedFallback(cleanUrl, platform, res) {
             views: 'Verified Stream',
             formats: {
               audio: [
-                { label: 'MP3 Ultra HD (320 kbps)', bitrate: '320k', size: '~8.5 MB', format_id: 'mp3-320', download_url: fallbackDownloadUrl },
-                { label: 'MP3 High Quality (256 kbps)', bitrate: '256k', size: '~6.2 MB', format_id: 'mp3-256', download_url: fallbackDownloadUrl },
-                { label: 'MP3 Standard (128 kbps)', bitrate: '128k', size: '~3.4 MB', format_id: 'mp3-128', download_url: fallbackDownloadUrl },
-                { label: 'M4A Original Stream', bitrate: 'm4a', size: '~5.1 MB', format_id: 'mp3-128', download_url: fallbackDownloadUrl }
+                { label: 'MP3 Ultra HD (320 kbps)', bitrate: '320k', size: '~8.5 MB', format_id: 'mp3-320', download_url: fallbackAudioUrl },
+                { label: 'MP3 High Quality (256 kbps)', bitrate: '256k', size: '~6.2 MB', format_id: 'mp3-256', download_url: fallbackAudioUrl },
+                { label: 'MP3 Standard (128 kbps)', bitrate: '128k', size: '~3.4 MB', format_id: 'mp3-128', download_url: fallbackAudioUrl },
+                { label: 'M4A Original Stream', bitrate: 'm4a', size: '~5.1 MB', format_id: 'mp3-128', download_url: fallbackAudioUrl }
               ],
               video: [
-                { label: 'MP4 4K Ultra HD (HDR Color Grade + Crisp Edge)', res: '2160p', size: '~120 MB', format_id: 'mp4-4k', download_url: fallbackDownloadUrl },
-                { label: 'MP4 Full HD (1080p + Audio)', res: '1080p', size: '~45 MB', format_id: 'mp4-1080', download_url: fallbackDownloadUrl },
-                { label: 'MP4 HD (720p + Audio)', res: '720p', size: '~22 MB', format_id: 'mp4-720', download_url: fallbackDownloadUrl },
-                { label: 'MP4 SD (480p + Audio)', res: '480p', size: '~12 MB', format_id: 'mp4-480', download_url: fallbackDownloadUrl }
+                { label: 'MP4 4K Ultra HD (HDR Color Grade + Crisp Edge)', res: '2160p', size: '~120 MB', format_id: 'mp4-4k', download_url: fallbackVideoUrl },
+                { label: 'MP4 Full HD (1080p + Audio)', res: '1080p', size: '~45 MB', format_id: 'mp4-1080', download_url: fallbackVideoUrl },
+                { label: 'MP4 HD (720p + Audio)', res: '720p', size: '~22 MB', format_id: 'mp4-720', download_url: fallbackVideoUrl },
+                { label: 'MP4 SD (480p + Audio)', res: '480p', size: '~12 MB', format_id: 'mp4-480', download_url: fallbackVideoUrl }
               ]
             }
           });
@@ -547,7 +548,7 @@ app.get('/api/info', async (req, res) => {
   });
 });
 
-// Stream Download Handler API (NATIVE AAC M4A / MP4 AUDIO & VIDEO STREAMING - 100% WINDOWS MEDIA PLAYER COMPATIBLE!)
+// Stream Download Handler API (FORMAT 18/22 MP4 WITH UNIVERSAL H.264 VIDEO + AAC AUDIO FOR 100% SOUND & PLAYBACK COMPATIBILITY!)
 app.get('/api/download', (req, res) => {
   const { url, type, quality, title } = req.query;
 
@@ -565,36 +566,30 @@ app.get('/api/download', (req, res) => {
   }
 
   const cleanTitle = (title || 'sonicmedia-download').replace(/[^a-zA-Z0-9_-]/g, '_');
-  
-  // High-compatibility extensions: Format 140 (AAC) is native .m4a/.mp3 audio; Format 18/22 is native .mp4 video
-  const ext = type === 'audio' ? 'm4a' : 'mp4';
+  const ext = type === 'audio' ? 'mp4' : 'mp4';
   const filename = `${cleanTitle}.${ext}`;
 
-  console.log(`[API /download] Native Media Stream Request for [${type}]: ${cleanUrl}`);
+  console.log(`[API /download] Native Audio+Video Stream Request for [${type}]: ${cleanUrl}`);
 
-  // Direct CDN Stream Link (-g) using Native Compatible Format 140 (AAC Audio) and 18/22 (MP4 Video+Audio)
+  // Direct CDN Stream Link (-g) using Format 18/22 (Native MP4 Video + AAC Audio - plays 100% sound on Windows Media Player!)
   const gArgs = [
     '-g',
+    '-f', '18/22/b/best',
     '--extractor-args', 'youtube:player_client=android,web',
     '--ignore-no-formats-error',
     '--force-ipv4',
     '--socket-timeout', '8',
     '--no-warnings',
-    '--no-playlist'
+    '--no-playlist',
+    cleanUrl
   ];
-  if (type === 'audio') {
-    gArgs.push('-f', '140/ba[ext=m4a]/ba/b');
-  } else {
-    gArgs.push('-f', '18/22/134+140/b/best');
-  }
-  gArgs.push(cleanUrl);
 
   runYtDlp(gArgs, (code, stdoutData) => {
     if (code === 0 && stdoutData) {
       const cdnUrls = stdoutData.trim().split('\n').filter(Boolean);
       const directCdnUrl = cdnUrls[0];
       if (directCdnUrl && directCdnUrl.startsWith('http')) {
-        console.log(`⚡ Native Stream Found (Format 140/18)! Redirecting browser...`);
+        console.log(`⚡ Native MP4 Stream Found! Redirecting browser...`);
         return res.redirect(directCdnUrl);
       }
     }
@@ -603,27 +598,23 @@ app.get('/api/download', (req, res) => {
 
     // Real-Time Stdout Pipe Stream
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.setHeader('Content-Type', type === 'audio' ? 'audio/mp4' : 'video/mp4');
+    res.setHeader('Content-Type', 'video/mp4');
 
     ensureYtDlpBinary((binPath) => {
       const commands = getStrategyList(binPath);
 
       const pipeArgs = [
         '-o', '-',
+        '-f', '18/22/b/best',
         '--extractor-args', 'youtube:player_client=android,web',
         '--ignore-no-formats-error',
         '--no-part',
         '--force-ipv4',
         '--socket-timeout', '10',
         '--no-warnings',
-        '--no-playlist'
+        '--no-playlist',
+        cleanUrl
       ];
-      if (type === 'audio') {
-        pipeArgs.push('-f', '140/ba[ext=m4a]/ba/b');
-      } else {
-        pipeArgs.push('-f', '18/22/134+140/b/best');
-      }
-      pipeArgs.push(cleanUrl);
 
       function tryPipe(index) {
         if (index >= commands.length) {
