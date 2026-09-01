@@ -5,15 +5,52 @@ import fs from 'fs';
 import path from 'path';
 import https from 'https';
 
-// Add Render Linux VirtualEnv and local paths to process.env.PATH
-const homeDir = process.env.HOME || '/home/render';
-process.env.PATH = `/opt/render/project/src/.venv/bin:${homeDir}/.local/bin:${homeDir}/.local/lib/python3/site-packages:/usr/local/bin:${process.env.PATH}`;
-
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(express.json());
+
+const YTDLP_BIN = path.join(process.cwd(), 'server', process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
+
+// Auto-downloader for official standalone yt-dlp binary (works 100% on Render Linux and Windows)
+function ensureYtDlpBinary(callback) {
+  if (fs.existsSync(YTDLP_BIN)) {
+    return callback(YTDLP_BIN);
+  }
+
+  console.log(`⏳ Downloading official standalone yt-dlp binary...`);
+  const downloadUrl = process.platform === 'win32'
+    ? 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe'
+    : 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp';
+
+  function fetchUrl(targetUrl) {
+    https.get(targetUrl, (response) => {
+      if (response.statusCode === 301 || response.statusCode === 302) {
+        return fetchUrl(response.headers.location);
+      }
+      const file = fs.createWriteStream(YTDLP_BIN);
+      response.pipe(file);
+      file.on('finish', () => {
+        file.close(() => {
+          if (process.platform !== 'win32') {
+            try { fs.chmodSync(YTDLP_BIN, '755'); } catch (e) {}
+          }
+          console.log(`✅ Standalone yt-dlp binary downloaded successfully: ${YTDLP_BIN}`);
+          callback(YTDLP_BIN);
+        });
+      });
+    }).on('error', (err) => {
+      console.error('Failed to download yt-dlp binary:', err);
+      callback(null);
+    });
+  }
+
+  fetchUrl(downloadUrl);
+}
+
+// Start downloading binary asynchronously in background
+ensureYtDlpBinary(() => {});
 
 // Dynamic Sitemap.xml endpoint for Googlebot Indexer
 app.get('/sitemap.xml', (req, res) => {
@@ -207,51 +244,63 @@ function answerTelegramCallback(callbackQueryId, text) {
 // Start Telegram Polling loop
 pollTelegramUpdates();
 
-// Resilient yt-dlp execution strategy chain including Render VirtualEnv paths
+// Resilient yt-dlp execution strategy chain with downloaded binary priority
 function runYtDlp(args, callback) {
-  const commands = [
-    { cmd: '/opt/render/project/src/.venv/bin/yt-dlp', extraArgs: [] },
-    { cmd: '/opt/render/project/src/.venv/bin/python', extraArgs: ['-m', 'yt_dlp'] },
-    { cmd: 'yt-dlp', extraArgs: [] },
-    { cmd: 'python3', extraArgs: ['-m', 'yt_dlp'] },
-    { cmd: 'python', extraArgs: ['-m', 'yt_dlp'] },
-    { cmd: `${homeDir}/.local/bin/yt-dlp`, extraArgs: [] }
-  ];
-
-  function tryCommand(index) {
-    if (index >= commands.length) {
-      return callback(1, '', 'All yt-dlp execution strategies failed');
+  ensureYtDlpBinary((downloadedBin) => {
+    const commands = [];
+    if (downloadedBin && fs.existsSync(downloadedBin)) {
+      commands.push({ cmd: downloadedBin, extraArgs: [] });
     }
+    commands.push(
+      { cmd: 'yt-dlp', extraArgs: [] },
+      { cmd: 'python3', extraArgs: ['-m', 'yt_dlp'] },
+      { cmd: 'python', extraArgs: ['-m', 'yt_dlp'] },
+      { cmd: '/opt/render/project/src/.venv/bin/yt-dlp', extraArgs: [] }
+    );
 
-    const { cmd, extraArgs } = commands[index];
-    const fullArgs = [...extraArgs, ...args];
-
-    let py;
-    try {
-      py = spawn(cmd, fullArgs);
-    } catch (e) {
-      return tryCommand(index + 1);
-    }
-
-    let stdoutData = '';
-    let stderrData = '';
-
-    py.stdout.on('data', d => stdoutData += d.toString());
-    py.stderr.on('data', d => stderrData += d.toString());
-
-    py.on('error', () => {
-      tryCommand(index + 1);
-    });
-
-    py.on('close', (code) => {
-      if (code === 0 && stdoutData) {
-        return callback(0, stdoutData, stderrData);
+    function tryCommand(index) {
+      if (index >= commands.length) {
+        return callback(1, '', 'All yt-dlp execution strategies failed');
       }
-      tryCommand(index + 1);
-    });
-  }
 
-  tryCommand(0);
+      const { cmd, extraArgs } = commands[index];
+      const fullArgs = [...extraArgs, ...args];
+
+      let py;
+      let handled = false;
+
+      try {
+        py = spawn(cmd, fullArgs);
+      } catch (e) {
+        return tryCommand(index + 1);
+      }
+
+      let stdoutData = '';
+      let stderrData = '';
+
+      py.on('error', (err) => {
+        if (!handled) {
+          handled = true;
+          tryCommand(index + 1);
+        }
+      });
+
+      py.stdout.on('data', d => stdoutData += d.toString());
+      py.stderr.on('data', d => stderrData += d.toString());
+
+      py.on('close', (code) => {
+        if (handled) return;
+        if (code === 0 && stdoutData) {
+          handled = true;
+          return callback(0, stdoutData, stderrData);
+        }
+        handled = true;
+        tryCommand(index + 1);
+      });
+    }
+
+    tryCommand(0);
+  });
 }
 
 // Universal platform detection helper
@@ -300,7 +349,7 @@ function formatDuration(sec) {
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
-    path: process.env.PATH,
+    binary: fs.existsSync(YTDLP_BIN) ? 'active' : 'downloading',
     telegram: TELEGRAM_BOT_TOKEN ? 'configured' : 'not_configured',
     bot_name: '@sonic_media_pro_bot',
     chat_id: TELEGRAM_CHAT_ID,
@@ -366,7 +415,7 @@ app.get('/api/payment-status', (req, res) => {
   res.json({ utr: cleanUtr, status: 'NOT_FOUND' });
 });
 
-// Extract Media Metadata API with Resilient runYtDlp Strategy Chain
+// Extract Media Metadata API with Standalone Binary Auto-Downloader
 app.get('/api/info', async (req, res) => {
   const { url } = req.query;
 
