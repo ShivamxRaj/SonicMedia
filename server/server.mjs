@@ -13,13 +13,15 @@ app.use(express.json());
 
 const YTDLP_BIN = path.join(process.cwd(), 'server', process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
 
-// Auto-downloader for official standalone yt-dlp binary (runs in background)
+// Download standalone yt-dlp binary if missing
 function ensureYtDlpBinary(callback) {
   if (fs.existsSync(YTDLP_BIN)) {
-    return callback ? callback(YTDLP_BIN) : null;
+    try { fs.chmodSync(YTDLP_BIN, '755'); } catch (e) {}
+    if (callback) callback(YTDLP_BIN);
+    return YTDLP_BIN;
   }
 
-  console.log(`⏳ Downloading official standalone yt-dlp binary in background...`);
+  console.log(`⏳ Downloading official standalone yt-dlp binary to ${YTDLP_BIN}...`);
   const downloadUrl = process.platform === 'win32'
     ? 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe'
     : 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp';
@@ -49,14 +51,31 @@ function ensureYtDlpBinary(callback) {
   fetchUrl(downloadUrl);
 }
 
-// Start downloading binary asynchronously in background
+// Start downloading binary immediately
 ensureYtDlpBinary();
 
-// Helper to extract YouTube Video ID
-function extractYouTubeId(url) {
-  if (!url) return null;
-  const m = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/i);
-  return m ? m[1] : null;
+// Dynamically return valid yt-dlp commands that exist on the filesystem
+function getCommands() {
+  const homeBin = path.join(process.env.HOME || '/root', '.local', 'bin', 'yt-dlp');
+  const nodeModulesBin = path.join(process.cwd(), 'node_modules', 'yt-dlp-exec', 'bin', process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
+
+  const candidates = [
+    { label: 'server-yt-dlp-bin', cmd: YTDLP_BIN, extraArgs: [] },
+    { label: 'node-modules-yt-dlp-exec', cmd: nodeModulesBin, extraArgs: [] },
+    { label: 'home-local-bin', cmd: homeBin, extraArgs: [] },
+    { label: 'render-venv-ytdlp', cmd: '/opt/render/project/src/.venv/bin/yt-dlp', extraArgs: [] },
+    { label: 'render-venv-python', cmd: '/opt/render/project/src/.venv/bin/python', extraArgs: ['-m', 'yt_dlp'] },
+    { label: 'global-yt-dlp', cmd: 'yt-dlp', extraArgs: [] },
+    { label: 'python3-m', cmd: 'python3', extraArgs: ['-m', 'yt_dlp'] },
+    { label: 'python-m', cmd: 'python', extraArgs: ['-m', 'yt_dlp'] }
+  ];
+
+  return candidates.filter(c => {
+    if (path.isAbsolute(c.cmd)) {
+      return fs.existsSync(c.cmd);
+    }
+    return true;
+  });
 }
 
 // Dynamic Sitemap.xml endpoint for Googlebot Indexer
@@ -251,25 +270,16 @@ function answerTelegramCallback(callbackQueryId, text) {
 // Start Telegram Polling loop
 pollTelegramUpdates();
 
-// Direct non-blocking execution strategy list with Render virtualenv paths first
+// Direct non-blocking execution strategy list with dynamic filesystem existence checks
 function runYtDlp(args, callback) {
-  const commands = [
-    { cmd: '/opt/render/project/src/.venv/bin/yt-dlp', extraArgs: [] },
-    { cmd: '/opt/render/project/src/.venv/bin/python', extraArgs: ['-m', 'yt_dlp'] },
-    { cmd: 'yt-dlp', extraArgs: [] },
-    { cmd: 'python3', extraArgs: ['-m', 'yt_dlp'] },
-    { cmd: 'python', extraArgs: ['-m', 'yt_dlp'] }
-  ];
-  if (fs.existsSync(YTDLP_BIN)) {
-    commands.unshift({ cmd: YTDLP_BIN, extraArgs: [] });
-  }
+  const commands = getCommands();
 
   function tryCommand(index) {
     if (index >= commands.length) {
       return callback(1, '', 'All yt-dlp execution strategies failed');
     }
 
-    const { cmd, extraArgs } = commands[index];
+    const { cmd, extraArgs, label } = commands[index];
     const fullArgs = [...extraArgs, ...args];
 
     let py;
@@ -278,15 +288,17 @@ function runYtDlp(args, callback) {
     try {
       py = spawn(cmd, fullArgs);
     } catch (e) {
+      console.error(`[runYtDlp ${label}] spawn error:`, e.message);
       return tryCommand(index + 1);
     }
 
     let stdoutData = '';
     let stderrData = '';
 
-    py.on('error', () => {
+    py.on('error', (err) => {
       if (!handled) {
         handled = true;
+        console.error(`[runYtDlp ${label}] process error:`, err.message);
         tryCommand(index + 1);
       }
     });
@@ -301,6 +313,7 @@ function runYtDlp(args, callback) {
         return callback(0, stdoutData, stderrData);
       }
       handled = true;
+      console.error(`[runYtDlp ${label}] exited with code ${code}. stderr:`, stderrData.slice(-200));
       tryCommand(index + 1);
     });
   }
@@ -403,6 +416,7 @@ app.get('/api/health', (req, res) => {
     telegram: TELEGRAM_BOT_TOKEN ? 'configured' : 'not_configured',
     bot_name: '@sonic_media_pro_bot',
     chat_id: TELEGRAM_CHAT_ID,
+    available_commands: getCommands().map(c => `${c.label}: ${c.cmd}`),
     time: new Date().toISOString()
   });
 });
@@ -411,21 +425,14 @@ app.get('/api/health', (req, res) => {
 app.get('/api/debug', (req, res) => {
   const testUrl = req.query.url || 'https://youtu.be/bKuL8VRXYKM';
   const results = [];
-  
-  const commands = [
-    { label: 'venv-ytdlp', cmd: '/opt/render/project/src/.venv/bin/yt-dlp', extraArgs: [] },
-    { label: 'venv-python', cmd: '/opt/render/project/src/.venv/bin/python', extraArgs: ['-m', 'yt_dlp'] },
-    { label: 'global-ytdlp', cmd: 'yt-dlp', extraArgs: [] },
-    { label: 'python3-m', cmd: 'python3', extraArgs: ['-m', 'yt_dlp'] },
-    { label: 'python-m', cmd: 'python', extraArgs: ['-m', 'yt_dlp'] }
-  ];
-  
-  if (fs.existsSync(YTDLP_BIN)) {
-    commands.unshift({ label: 'standalone-bin', cmd: YTDLP_BIN, extraArgs: [] });
-  }
-  
+  const commands = getCommands();
+
   let completed = 0;
-  
+
+  if (commands.length === 0) {
+    return res.json({ testUrl, status: 'no_commands_found', YTDLP_BIN, exists: fs.existsSync(YTDLP_BIN) });
+  }
+
   commands.forEach(({ label, cmd, extraArgs }) => {
     const args = [...extraArgs, '--version'];
     let py;
@@ -437,7 +444,7 @@ app.get('/api/debug', (req, res) => {
       if (completed === commands.length) res.json({ testUrl, commands: results });
       return;
     }
-    
+
     let stdout = '';
     let stderr = '';
     py.stdout.on('data', d => stdout += d.toString());
@@ -513,7 +520,7 @@ app.get('/api/payment-status', (req, res) => {
   res.json({ utr: cleanUtr, status: 'NOT_FOUND' });
 });
 
-// Extract Media Metadata API with mweb,tv,android,web Player Client Bypass & Noembed Fallback
+// Extract Media Metadata API with android Player Client Bypass & Noembed Fallback
 app.get('/api/info', async (req, res) => {
   const { url } = req.query;
 
@@ -536,7 +543,7 @@ app.get('/api/info', async (req, res) => {
 
   const infoArgs = [
     '--dump-single-json',
-    '--extractor-args', 'youtube:player_client=mweb,tv,android,web',
+    '--extractor-args', 'youtube:player_client=android',
     '--no-check-certificates',
     '--ignore-no-formats-error',
     '--no-warnings',
@@ -595,8 +602,6 @@ app.get('/api/info', async (req, res) => {
 });
 
 // Stream Download Handler API (ZERO-REDIRECT BINARY PIPE ENGINE)
-// CRITICAL: NEVER use res.redirect() — CDN URLs are IP-locked to Render server,
-// user's browser will get rejected by GoogleVideo and fall back to YouTube page.
 // ALWAYS pipe binary stream through our Express server using yt-dlp -o - stdout.
 app.get('/api/download', (req, res) => {
   const { url, type, quality, title } = req.query;
@@ -620,18 +625,7 @@ app.get('/api/download', (req, res) => {
 
   console.log(`[API /download] Binary Pipe Stream Request for [${type}]: ${cleanUrl}`);
 
-  // Execution strategy list — try each yt-dlp command until one works
-  const commands = [
-    { cmd: '/opt/render/project/src/.venv/bin/yt-dlp', extraArgs: [] },
-    { cmd: '/opt/render/project/src/.venv/bin/python', extraArgs: ['-m', 'yt_dlp'] },
-    { cmd: 'yt-dlp', extraArgs: [] },
-    { cmd: 'python3', extraArgs: ['-m', 'yt_dlp'] },
-    { cmd: 'python', extraArgs: ['-m', 'yt_dlp'] }
-  ];
-
-  if (fs.existsSync(YTDLP_BIN)) {
-    commands.unshift({ cmd: YTDLP_BIN, extraArgs: [] });
-  }
+  const commands = getCommands();
 
   // Always pipe binary to stdout — NEVER redirect to external URLs
   const pipeArgs = [
@@ -649,13 +643,12 @@ app.get('/api/download', (req, res) => {
     if (index >= commands.length) {
       console.error(`❌ All stream pipe strategies failed for: ${cleanUrl}`);
       if (!res.headersSent) {
-        // NEVER redirect to YouTube — show a clean error instead
         res.status(500).send('⚠️ Download failed. The stream is temporarily unavailable. Please try again in a few seconds.');
       }
       return;
     }
 
-    const { cmd, extraArgs } = commands[index];
+    const { cmd, extraArgs, label } = commands[index];
     let child;
     let hasWritten = false;
     let stderrLog = '';
@@ -663,13 +656,13 @@ app.get('/api/download', (req, res) => {
     try {
       child = spawn(cmd, [...extraArgs, ...pipeArgs]);
     } catch (e) {
-      console.error(`[tryPipe ${index}] spawn error for ${cmd}:`, e.message);
+      console.error(`[tryPipe ${label}] spawn error:`, e.message);
       return tryPipe(index + 1);
     }
 
     // 45-second timeout to kill stuck processes
     const killTimer = setTimeout(() => {
-      console.error(`[tryPipe ${index}] TIMEOUT 45s for ${cmd}, killing process`);
+      console.error(`[tryPipe ${label}] TIMEOUT 45s, killing process`);
       try { child.kill('SIGKILL'); } catch (e) {}
     }, 45000);
 
@@ -682,25 +675,25 @@ app.get('/api/download', (req, res) => {
         hasWritten = true;
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
         res.setHeader('Content-Type', type === 'audio' ? 'audio/mpeg' : 'video/mp4');
-        console.log(`[tryPipe ${index}] ✅ First chunk received from ${cmd}, streaming to browser...`);
+        console.log(`[tryPipe ${label}] ✅ First chunk received, streaming to browser...`);
       }
       res.write(chunk);
     });
 
     child.on('error', (err) => {
       clearTimeout(killTimer);
-      console.error(`[tryPipe ${index}] process error for ${cmd}:`, err.message);
+      console.error(`[tryPipe ${label}] process error:`, err.message);
       if (!hasWritten) tryPipe(index + 1);
     });
 
     child.on('close', (exitCode) => {
       clearTimeout(killTimer);
       if (!hasWritten && exitCode !== 0) {
-        console.error(`[tryPipe ${index}] ${cmd} exited with code ${exitCode}. stderr: ${stderrLog.slice(-300)}`);
+        console.error(`[tryPipe ${label}] exited with code ${exitCode}. stderr: ${stderrLog.slice(-300)}`);
         return tryPipe(index + 1);
       }
       if (hasWritten) {
-        console.log(`[tryPipe ${index}] ✅ Stream completed for ${cmd}`);
+        console.log(`[tryPipe ${label}] ✅ Stream completed`);
       }
       res.end();
     });
