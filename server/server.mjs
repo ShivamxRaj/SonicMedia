@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import { spawn } from 'child_process';
+import { spawn, execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import https from 'https';
@@ -16,13 +16,16 @@ const YTDLP_TMP = path.join(process.cwd(), 'server', process.platform === 'win32
 
 // Download standalone yt-dlp binary atomically via temp file
 function ensureYtDlpBinary(callback) {
-  if (fs.existsSync(YTDLP_BIN)) {
-    try { fs.chmodSync(YTDLP_BIN, '755'); } catch (e) {}
+  if (fs.existsSync(YTDLP_BIN) && fs.statSync(YTDLP_BIN).size > 5000000) {
+    if (process.platform !== 'win32') {
+      try { fs.chmodSync(YTDLP_BIN, 0o755); } catch (e) {}
+    }
+    console.log(`✅ Standalone latest yt-dlp binary verified: ${YTDLP_BIN}`);
     if (callback) callback(YTDLP_BIN);
     return YTDLP_BIN;
   }
 
-  console.log(`⏳ Downloading official standalone yt-dlp binary to ${YTDLP_TMP}...`);
+  console.log(`⏳ Downloading official latest standalone yt-dlp binary to ${YTDLP_TMP}...`);
   const downloadUrl = process.platform === 'win32'
     ? 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe'
     : 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp';
@@ -37,11 +40,14 @@ function ensureYtDlpBinary(callback) {
       file.on('finish', () => {
         file.close(() => {
           if (process.platform !== 'win32') {
-            try { fs.chmodSync(YTDLP_TMP, '755'); } catch (e) {}
+            try { fs.chmodSync(YTDLP_TMP, 0o755); } catch (e) {}
           }
           try {
             fs.renameSync(YTDLP_TMP, YTDLP_BIN);
-            console.log(`✅ Standalone yt-dlp binary ready: ${YTDLP_BIN}`);
+            if (process.platform !== 'win32') {
+              try { fs.chmodSync(YTDLP_BIN, 0o755); } catch (e) {}
+            }
+            console.log(`✅ Standalone latest yt-dlp binary ready: ${YTDLP_BIN}`);
             if (callback) callback(YTDLP_BIN);
           } catch (err) {
             console.error('Failed to rename temp yt-dlp binary:', err);
@@ -66,9 +72,9 @@ function getCommands() {
   const nodeModulesBin = path.join(process.cwd(), 'node_modules', 'yt-dlp-exec', 'bin', process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
 
   const candidates = [
+    { label: 'server-yt-dlp-bin', cmd: YTDLP_BIN, extraArgs: [] },
     { label: 'node-modules-yt-dlp-exec', cmd: nodeModulesBin, extraArgs: [] },
     { label: 'render-venv-ytdlp', cmd: '/opt/render/project/src/.venv/bin/yt-dlp', extraArgs: [] },
-    { label: 'server-yt-dlp-bin', cmd: YTDLP_BIN, extraArgs: [] },
     { label: 'home-local-bin', cmd: homeBin, extraArgs: [] },
     { label: 'render-venv-python', cmd: '/opt/render/project/src/.venv/bin/python', extraArgs: ['-m', 'yt_dlp'] },
     { label: 'global-yt-dlp', cmd: 'yt-dlp', extraArgs: [] },
@@ -79,7 +85,13 @@ function getCommands() {
   return candidates.filter(c => {
     if (path.isAbsolute(c.cmd)) {
       try {
-        return fs.existsSync(c.cmd) && fs.statSync(c.cmd).size > 1000000;
+        if (fs.existsSync(c.cmd) && fs.statSync(c.cmd).size > 1000000) {
+          if (process.platform !== 'win32') {
+            try { fs.chmodSync(c.cmd, 0o755); } catch (e) {}
+          }
+          return true;
+        }
+        return false;
       } catch (e) {
         return false;
       }
