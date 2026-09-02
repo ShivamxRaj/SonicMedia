@@ -546,7 +546,10 @@ app.get('/api/info', async (req, res) => {
   });
 });
 
-// Stream Download Handler API (GUARANTEED MULTI-CLIENT MEDIA STREAM ENGINE)
+// Stream Download Handler API (ZERO-REDIRECT BINARY PIPE ENGINE)
+// CRITICAL: NEVER use res.redirect() — CDN URLs are IP-locked to Render server,
+// user's browser will get rejected by GoogleVideo and fall back to YouTube page.
+// ALWAYS pipe binary stream through our Express server using yt-dlp -o - stdout.
 app.get('/api/download', (req, res) => {
   const { url, type, quality, title } = req.query;
 
@@ -567,107 +570,79 @@ app.get('/api/download', (req, res) => {
   const ext = type === 'audio' ? 'mp3' : 'mp4';
   const filename = `${cleanTitle}.${ext}`;
 
-  console.log(`[API /download] Direct Media Stream Request for [${type}]: ${cleanUrl}`);
+  console.log(`[API /download] Binary Pipe Stream Request for [${type}]: ${cleanUrl}`);
 
-  // Step 1: Try direct CDN URL extraction (-g) with mweb,tv,android,web player clients
-  const gArgs = [
-    '-g',
+  // Execution strategy list — try each yt-dlp command until one works
+  const commands = [
+    { cmd: '/opt/render/project/src/.venv/bin/yt-dlp', extraArgs: [] },
+    { cmd: '/opt/render/project/src/.venv/bin/python', extraArgs: ['-m', 'yt_dlp'] },
+    { cmd: 'yt-dlp', extraArgs: [] },
+    { cmd: 'python3', extraArgs: ['-m', 'yt_dlp'] },
+    { cmd: 'python', extraArgs: ['-m', 'yt_dlp'] }
+  ];
+
+  if (fs.existsSync(YTDLP_BIN)) {
+    commands.unshift({ cmd: YTDLP_BIN, extraArgs: [] });
+  }
+
+  // Always pipe binary to stdout — NEVER redirect to external URLs
+  const pipeArgs = [
+    '-o', '-',
     '--extractor-args', 'youtube:player_client=mweb,tv,android,web',
     '--no-check-certificates',
     '--ignore-no-formats-error',
+    '--no-part',
     '--no-warnings',
     '--no-playlist',
     cleanUrl
   ];
 
-  runYtDlp(gArgs, (code, stdoutData, stderrData) => {
-    if (code === 0 && stdoutData) {
-      const cdnUrls = stdoutData.trim().split('\n').filter(Boolean);
-      let directCdnUrl = null;
-      if (type === 'audio') {
-        directCdnUrl = cdnUrls.find(u => u.includes('mime=audio')) || cdnUrls[cdnUrls.length - 1] || cdnUrls[0];
-      } else {
-        directCdnUrl = cdnUrls[0];
+  function tryPipe(index) {
+    if (index >= commands.length) {
+      console.error(`❌ All stream pipe strategies failed for: ${cleanUrl}`);
+      if (!res.headersSent) {
+        // NEVER redirect to YouTube — show a clean error instead
+        res.status(500).send('⚠️ Download failed. The stream is temporarily unavailable. Please try again in a few seconds.');
       }
-
-      if (directCdnUrl && directCdnUrl.startsWith('http')) {
-        console.log(`⚡ Direct CDN Stream Link Found! Redirecting browser directly to GoogleVideo CDN...`);
-        return res.redirect(directCdnUrl);
-      }
+      return;
     }
 
-    console.error(`yt-dlp -g stderr:`, stderrData);
-    console.log(`⚡ Direct CDN URL failed. Streaming binary directly to browser via stdout pipe...`);
+    const { cmd, extraArgs } = commands[index];
+    let child;
+    let hasWritten = false;
 
-    const commands = [
-      { cmd: '/opt/render/project/src/.venv/bin/yt-dlp', extraArgs: [] },
-      { cmd: '/opt/render/project/src/.venv/bin/python', extraArgs: ['-m', 'yt_dlp'] },
-      { cmd: 'yt-dlp', extraArgs: [] },
-      { cmd: 'python3', extraArgs: ['-m', 'yt_dlp'] },
-      { cmd: 'python', extraArgs: ['-m', 'yt_dlp'] }
-    ];
-
-    if (fs.existsSync(YTDLP_BIN)) {
-      commands.unshift({ cmd: YTDLP_BIN, extraArgs: [] });
+    try {
+      child = spawn(cmd, [...extraArgs, ...pipeArgs]);
+    } catch (e) {
+      return tryPipe(index + 1);
     }
 
-    const pipeArgs = [
-      '-o', '-',
-      '--extractor-args', 'youtube:player_client=mweb,tv,android,web',
-      '--no-check-certificates',
-      '--ignore-no-formats-error',
-      '--no-part',
-      '--no-warnings',
-      '--no-playlist',
-      cleanUrl
-    ];
-
-    function tryPipe(index) {
-      if (index >= commands.length) {
-        console.error(`❌ Stream pipe failed.`);
-        if (!res.headersSent) {
-          return res.redirect(cleanUrl);
-        }
-        return;
+    child.stdout.on('data', (chunk) => {
+      if (!hasWritten) {
+        hasWritten = true;
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.setHeader('Content-Type', type === 'audio' ? 'audio/mpeg' : 'video/mp4');
       }
+      res.write(chunk);
+    });
 
-      const { cmd, extraArgs } = commands[index];
-      let child;
-      let hasWritten = false;
+    child.on('error', () => {
+      if (!hasWritten) tryPipe(index + 1);
+    });
 
-      try {
-        child = spawn(cmd, [...extraArgs, ...pipeArgs]);
-      } catch (e) {
+    child.on('close', (exitCode) => {
+      if (!hasWritten && exitCode !== 0) {
         return tryPipe(index + 1);
       }
+      res.end();
+    });
 
-      child.stdout.on('data', (chunk) => {
-        if (!hasWritten) {
-          hasWritten = true;
-          res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-          res.setHeader('Content-Type', type === 'audio' ? 'audio/mpeg' : 'video/mp4');
-        }
-        res.write(chunk);
-      });
+    req.on('close', () => {
+      try { child.kill(); } catch (e) {}
+    });
+  }
 
-      child.on('error', () => {
-        if (!hasWritten) tryPipe(index + 1);
-      });
-
-      child.on('close', (exitCode) => {
-        if (!hasWritten && exitCode !== 0) {
-          return tryPipe(index + 1);
-        }
-        res.end();
-      });
-
-      req.on('close', () => {
-        try { child.kill(); } catch (e) {}
-      });
-    }
-
-    tryPipe(0);
-  });
+  tryPipe(0);
 });
 
 // Fallback to index.html for SPA routing
