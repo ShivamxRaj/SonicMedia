@@ -52,6 +52,13 @@ function ensureYtDlpBinary(callback) {
 // Start downloading binary asynchronously in background
 ensureYtDlpBinary();
 
+// Helper to extract YouTube Video ID
+function extractYouTubeId(url) {
+  if (!url) return null;
+  const m = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/i);
+  return m ? m[1] : null;
+}
+
 // Dynamic Sitemap.xml endpoint for Googlebot Indexer
 app.get('/sitemap.xml', (req, res) => {
   res.header('Content-Type', 'application/xml');
@@ -458,7 +465,7 @@ app.get('/api/payment-status', (req, res) => {
   res.json({ utr: cleanUtr, status: 'NOT_FOUND' });
 });
 
-// Extract Media Metadata API with android,web Player Client Bypass & Noembed Fallback
+// Extract Media Metadata API with android Player Client Bypass & Noembed Fallback
 app.get('/api/info', async (req, res) => {
   const { url } = req.query;
 
@@ -481,7 +488,7 @@ app.get('/api/info', async (req, res) => {
 
   const infoArgs = [
     '--dump-single-json',
-    '--extractor-args', 'youtube:player_client=android,web',
+    '--extractor-args', 'youtube:player_client=android',
     '--ignore-no-formats-error',
     '--force-ipv4',
     '--no-warnings',
@@ -539,7 +546,7 @@ app.get('/api/info', async (req, res) => {
   });
 });
 
-// Stream Download Handler API (SAFE STREAMING ENGINE - PREVENTS ERR_INVALID_RESPONSE 100%)
+// Stream Download Handler API (ANDROID PLAYER CLIENT BYPASS FOR DIRECT CDN STREAMING)
 app.get('/api/download', (req, res) => {
   const { url, type, quality, title } = req.query;
 
@@ -562,11 +569,11 @@ app.get('/api/download', (req, res) => {
 
   console.log(`[API /download] Direct Media Stream Request for [${type}]: ${cleanUrl}`);
 
-  // Step 1: Try direct CDN URL extraction (-g)
+  // Step 1: Try direct CDN URL extraction (-g) with android player client
   const gArgs = [
     '-g',
     '-f', type === 'audio' ? 'ba/b/bestaudio' : '18/22/b/best',
-    '--extractor-args', 'youtube:player_client=android,web',
+    '--extractor-args', 'youtube:player_client=android',
     '--ignore-no-formats-error',
     '--force-ipv4',
     '--no-warnings',
@@ -607,7 +614,7 @@ app.get('/api/download', (req, res) => {
     const pipeArgs = [
       '-o', '-',
       '-f', type === 'audio' ? 'ba/b/bestaudio' : '18/22/b/best',
-      '--extractor-args', 'youtube:player_client=android,web',
+      '--extractor-args', 'youtube:player_client=android',
       '--ignore-no-formats-error',
       '--no-part',
       '--force-ipv4',
