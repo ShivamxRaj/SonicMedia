@@ -448,7 +448,9 @@ app.get('/api/debug', (req, res) => {
     '--no-progress',
     '-o', '-',
     '-f', '18/b/best',
-    '--extractor-args', 'youtube:player_client=mweb,android,web',
+    '--extractor-args', 'youtube:player_client=android',
+    '--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
+    '--referer', 'https://www.youtube.com/',
     '--no-check-certificates',
     '--no-playlist',
     testUrl
@@ -581,7 +583,9 @@ app.get('/api/info', async (req, res) => {
 
   const infoArgs = [
     '--dump-single-json',
-    '--extractor-args', 'youtube:player_client=mweb,android,web',
+    '--extractor-args', 'youtube:player_client=android',
+    '--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
+    '--referer', 'https://www.youtube.com/',
     '--no-check-certificates',
     '--ignore-no-formats-error',
     '--no-warnings',
@@ -665,13 +669,15 @@ app.get('/api/download', (req, res) => {
 
   const commands = getCommands();
 
-  // Always pipe pure binary to stdout using -q (--quiet) and --no-progress to suppress text logs
+  // Always pipe pure binary to stdout using Android User-Agent and Referer headers to bypass datacenter IP checks
   const pipeArgs = [
     '-q',
     '--no-progress',
     '-o', '-',
     '-f', '18/b/best',
-    '--extractor-args', 'youtube:player_client=mweb,android,web',
+    '--extractor-args', 'youtube:player_client=android',
+    '--user-agent', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
+    '--referer', 'https://www.youtube.com/',
     '--no-check-certificates',
     '--ignore-no-formats-error',
     '--no-part',
