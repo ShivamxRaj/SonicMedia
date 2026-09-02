@@ -689,34 +689,47 @@ app.get('/api/download', (req, res) => {
   const FFMPEG_BIN = path.join(process.cwd(), 'node_modules', 'ffmpeg-static', process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg');
   const hasFfmpeg = fs.existsSync(FFMPEG_BIN);
 
-  let formatString = 'bestvideo+bestaudio/best';
-  if (type === 'audio') {
-    formatString = 'bestaudio/ba/best';
-  } else if (quality) {
-    const qLower = quality.toLowerCase();
-    if (qLower.includes('2160') || qLower.includes('4k') || qLower.includes('8k')) {
-      formatString = 'bestvideo[height<=2160]+bestaudio/bestvideo+bestaudio/best';
-    } else if (qLower.includes('1080')) {
-      formatString = 'bestvideo[height<=1080]+bestaudio/bestvideo+bestaudio/best';
-    } else if (qLower.includes('720')) {
-      formatString = 'bestvideo[height<=720]+bestaudio/bestvideo+bestaudio/best';
-    } else if (qLower.includes('480')) {
-      formatString = 'bestvideo[height<=480]+bestaudio/bestvideo+bestaudio/best';
-    }
-  }
-
   const pipeArgs = [
     '-q',
     '--no-progress',
-    '-o', '-',
-    '-f', formatString,
-    '--merge-output-format', 'mp4',
-    '--user-agent', '',
-    '--no-check-certificates',
-    '--ignore-no-formats-error',
-    '--no-part',
-    '--no-playlist'
+    '-o', '-'
   ];
+
+  if (type === 'audio') {
+    pipeArgs.push(
+      '-x',
+      '--audio-format', 'mp3',
+      '--audio-quality', '0',
+      '--user-agent', '',
+      '--no-check-certificates',
+      '--ignore-no-formats-error',
+      '--no-part',
+      '--no-playlist'
+    );
+  } else {
+    let formatString = 'bestvideo+bestaudio/best';
+    if (quality) {
+      const qLower = quality.toLowerCase();
+      if (qLower.includes('2160') || qLower.includes('4k') || qLower.includes('8k')) {
+        formatString = 'bestvideo[height<=2160]+bestaudio/bestvideo+bestaudio/best';
+      } else if (qLower.includes('1080')) {
+        formatString = 'bestvideo[height<=1080]+bestaudio/bestvideo+bestaudio/best';
+      } else if (qLower.includes('720')) {
+        formatString = 'bestvideo[height<=720]+bestaudio/bestvideo+bestaudio/best';
+      } else if (qLower.includes('480')) {
+        formatString = 'bestvideo[height<=480]+bestaudio/bestvideo+bestaudio/best';
+      }
+    }
+    pipeArgs.push(
+      '-f', formatString,
+      '--merge-output-format', 'mp4',
+      '--user-agent', '',
+      '--no-check-certificates',
+      '--ignore-no-formats-error',
+      '--no-part',
+      '--no-playlist'
+    );
+  }
 
   if (hasFfmpeg) {
     pipeArgs.push('--ffmpeg-location', FFMPEG_BIN);
@@ -735,7 +748,6 @@ app.get('/api/download', (req, res) => {
 
     const { cmd, extraArgs, label, env } = commands[index];
     let child;
-    let ffmpegProc = null;
     let hasWritten = false;
     let stderrLog = '';
 
@@ -749,69 +761,28 @@ app.get('/api/download', (req, res) => {
     const killTimer = setTimeout(() => {
       console.error(`[tryPipe ${label}] TIMEOUT 15min, killing process`);
       try { child.kill('SIGKILL'); } catch (e) {}
-      if (ffmpegProc) try { ffmpegProc.kill('SIGKILL'); } catch (e) {}
     }, 900000);
 
     child.stderr.on('data', (d) => {
       stderrLog += d.toString();
     });
 
-    if (type === 'audio' && hasFfmpeg) {
-      // Pipe through FFmpeg with ID3v2.3 & 44.1kHz stereo to produce 100% Windows Media Player compatible MP3
-      const audioBitrate = (quality && quality.includes('128')) ? '128k' : (quality && quality.includes('256')) ? '256k' : '320k';
-      try {
-        ffmpegProc = spawn(FFMPEG_BIN, [
-          '-i', 'pipe:0',
-          '-vn',
-          '-acodec', 'libmp3lame',
-          '-b:a', audioBitrate,
-          '-ar', '44100',
-          '-ac', '2',
-          '-id3v2_version', '3',
-          '-write_id3v1', '1',
-          '-f', 'mp3',
-          'pipe:1'
-        ]);
-
-        child.stdout.pipe(ffmpegProc.stdin);
-        ffmpegProc.stdout.pipe(res);
+    child.stdout.on('data', (chunk) => {
+      if (!hasWritten) {
         hasWritten = true;
-        console.log(`[tryPipe ${label} -> FFmpeg] ✅ Windows Media Player compatible MP3 stream active (${audioBitrate}), piping to browser as [${filename}]...`);
-
-        ffmpegProc.on('error', (err) => {
-          console.error('[FFmpeg audio error]', err.message);
-        });
-
-        ffmpegProc.on('close', (code) => {
-          clearTimeout(killTimer);
-          console.log(`[FFmpeg audio] Stream complete (code ${code})`);
-          if (!res.writableEnded) {
-            res.end();
-          }
-        });
-      } catch (e) {
-        console.error('FFmpeg audio spawn failed, falling back to direct pipe:', e);
+        console.log(`[tryPipe ${label}] ✅ First binary chunk received, streaming to browser as [${filename}]...`);
       }
-    }
+      const canWrite = res.write(chunk);
+      if (!canWrite && child.stdout.pause) {
+        child.stdout.pause();
+      }
+    });
 
-    if (!ffmpegProc) {
-      child.stdout.on('data', (chunk) => {
-        if (!hasWritten) {
-          hasWritten = true;
-          console.log(`[tryPipe ${label}] ✅ First binary chunk received, streaming to browser as [${filename}]...`);
-        }
-        const canWrite = res.write(chunk);
-        if (!canWrite && child.stdout.pause) {
-          child.stdout.pause();
-        }
-      });
-
-      res.on('drain', () => {
-        if (child && child.stdout && child.stdout.resume) {
-          child.stdout.resume();
-        }
-      });
-    }
+    res.on('drain', () => {
+      if (child && child.stdout && child.stdout.resume) {
+        child.stdout.resume();
+      }
+    });
 
     child.on('error', (err) => {
       clearTimeout(killTimer);
@@ -823,13 +794,12 @@ app.get('/api/download', (req, res) => {
       clearTimeout(killTimer);
       if (!hasWritten && exitCode !== 0) {
         console.error(`[tryPipe ${label}] exited with code ${exitCode}. stderr: ${stderrLog.slice(-300)}`);
-        if (ffmpegProc) try { ffmpegProc.kill('SIGKILL'); } catch (e) {}
         return tryPipe(index + 1);
       }
-      if (!ffmpegProc) {
-        if (hasWritten) {
-          console.log(`[tryPipe ${label}] ✅ Stream completed`);
-        }
+      if (hasWritten) {
+        console.log(`[tryPipe ${label}] ✅ Stream completed`);
+      }
+      if (!res.writableEnded) {
         res.end();
       }
     });
@@ -837,7 +807,6 @@ app.get('/api/download', (req, res) => {
     const cleanup = () => {
       clearTimeout(killTimer);
       try { child.kill('SIGKILL'); } catch (e) {}
-      if (ffmpegProc) try { ffmpegProc.kill('SIGKILL'); } catch (e) {}
     };
 
     req.on('close', cleanup);
