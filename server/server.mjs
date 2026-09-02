@@ -458,7 +458,7 @@ app.get('/api/payment-status', (req, res) => {
   res.json({ utr: cleanUtr, status: 'NOT_FOUND' });
 });
 
-// Extract Media Metadata API with android,web,mweb Player Client Bypass & Noembed Fallback
+// Extract Media Metadata API with android,web Player Client Bypass & Noembed Fallback
 app.get('/api/info', async (req, res) => {
   const { url } = req.query;
 
@@ -481,7 +481,7 @@ app.get('/api/info', async (req, res) => {
 
   const infoArgs = [
     '--dump-single-json',
-    '--extractor-args', 'youtube:player_client=android,web,mweb',
+    '--extractor-args', 'youtube:player_client=android,web',
     '--ignore-no-formats-error',
     '--force-ipv4',
     '--socket-timeout', '8',
@@ -540,7 +540,7 @@ app.get('/api/info', async (req, res) => {
   });
 });
 
-// Stream Download Handler API (SINGLE COMBINED NATIVE MP4 STREAM - 100% SOUND & FULL VIDEO PLAYBACK IN ALL PLAYERS!)
+// Stream Download Handler API (HIGH-SPEED RESILIENT AUDIO & VIDEO STREAM EXTRACTION)
 app.get('/api/download', (req, res) => {
   const { url, type, quality, title } = req.query;
 
@@ -557,33 +557,53 @@ app.get('/api/download', (req, res) => {
     return res.status(400).send('⚠️ Valid video or music URL is required.');
   }
 
-  console.log(`[API /download] Single Combined Native Stream Request for [${type}]: ${cleanUrl}`);
+  console.log(`[API /download] Direct High-Quality Media Stream Request for [${type}]: ${cleanUrl}`);
 
-  // Direct CDN Single Combined Stream Link (-g)
-  const gArgs = [
-    '-g',
-    '--extractor-args', 'youtube:player_client=android,web,mweb',
-    '--ignore-no-formats-error',
-    '--force-ipv4',
-    '--socket-timeout', '8',
-    '--no-warnings',
-    '--no-playlist',
-    cleanUrl
-  ];
+  // Multi-tier stream extraction strategy chain
+  function attemptStream(formatFilter) {
+    const gArgs = [
+      '-g',
+      '--extractor-args', 'youtube:player_client=android,web',
+      '--ignore-no-formats-error',
+      '--force-ipv4',
+      '--socket-timeout', '8',
+      '--no-warnings',
+      '--no-playlist'
+    ];
 
-  runYtDlp(gArgs, (code, stdoutData) => {
-    if (code === 0 && stdoutData) {
-      const cdnUrls = stdoutData.trim().split('\n').filter(Boolean);
-      const directCdnUrl = cdnUrls[0];
-
-      if (directCdnUrl && directCdnUrl.startsWith('http')) {
-        console.log(`⚡ Native Single Combined Stream Found! Redirecting browser...`);
-        return res.redirect(directCdnUrl);
-      }
+    if (formatFilter) {
+      gArgs.push('-f', formatFilter);
     }
+    gArgs.push(cleanUrl);
 
-    res.status(400).send('⚠️ Direct stream currently unavailable. Please re-fetch video link.');
-  });
+    runYtDlp(gArgs, (code, stdoutData) => {
+      if (code === 0 && stdoutData) {
+        const cdnUrls = stdoutData.trim().split('\n').filter(Boolean);
+        let directCdnUrl = null;
+        if (type === 'audio') {
+          directCdnUrl = cdnUrls.find(u => u.includes('mime=audio')) || cdnUrls[cdnUrls.length - 1] || cdnUrls[0];
+        } else {
+          directCdnUrl = cdnUrls[0];
+        }
+
+        if (directCdnUrl && directCdnUrl.startsWith('http')) {
+          console.log(`⚡ Direct High-Quality Media Stream Found! Redirecting browser...`);
+          return res.redirect(directCdnUrl);
+        }
+      }
+
+      // If format filter failed, try without format filter as ultimate fallback
+      if (formatFilter) {
+        console.log(`⚠️ Specified format failed. Trying fallback without format filter...`);
+        return attemptStream(null);
+      }
+
+      res.status(400).send('⚠️ Direct stream currently unavailable. Please re-fetch video link.');
+    });
+  }
+
+  const primaryFormat = type === 'audio' ? 'ba/b/bestaudio/b/best' : 'b/best/18/22/ba';
+  attemptStream(primaryFormat);
 });
 
 // Fallback to index.html for SPA routing
