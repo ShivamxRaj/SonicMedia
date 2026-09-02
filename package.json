@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "postinstall": "python3 -m pip install --user yt-dlp imageio-ffmpeg || pip install --user yt-dlp imageio-ffmpeg || true",
-    "build": "python3 -m pip install --user yt-dlp imageio-ffmpeg || pip install --user yt-dlp imageio-ffmpeg || true; vite build",
+    "postinstall": "mkdir -p server && (curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o server/yt-dlp || true) && (chmod +x server/yt-dlp || true)",
+    "build": "mkdir -p server && (curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o server/yt-dlp || true) && (chmod +x server/yt-dlp || true); vite build",
     "preview": "vite preview",
     "server": "node server/server.mjs",
     "start": "node server/server.mjs"
