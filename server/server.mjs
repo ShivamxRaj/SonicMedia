@@ -703,7 +703,8 @@ app.get('/api/download', (req, res) => {
       '-x',
       '--audio-format', 'mp3',
       '--audio-quality', '0',
-      '--user-agent', '',
+      '--extractor-args', 'youtube:player_client=android,web',
+      '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
       '--no-check-certificates',
       '--ignore-no-formats-error',
       '--no-part',
@@ -742,6 +743,12 @@ app.get('/api/download', (req, res) => {
       }, 900000);
 
       child.stderr.on('data', (d) => { stderrLog += d.toString(); });
+
+      child.on('error', (err) => {
+        clearTimeout(killTimer);
+        console.error(`[tryAudioConvert ${label}] spawn error:`, err.message);
+        tryAudioConvert(index + 1);
+      });
 
       child.on('close', (exitCode) => {
         clearTimeout(killTimer);
