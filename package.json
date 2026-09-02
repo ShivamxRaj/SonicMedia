@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "postinstall": "mkdir -p server && (curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o server/yt-dlp || true) && (chmod +x server/yt-dlp || true)",
-    "build": "mkdir -p server && (curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o server/yt-dlp || true) && (chmod +x server/yt-dlp || true); vite build",
+    "postinstall": "node node_modules/yt-dlp-exec/scripts/postinstall.js || true",
+    "build": "node node_modules/yt-dlp-exec/scripts/postinstall.js || true; vite build",
     "preview": "vite preview",
     "server": "node server/server.mjs",
     "start": "node server/server.mjs"
