@@ -785,6 +785,9 @@ app.get('/api/download', (req, res) => {
         ffmpegProc.on('close', (code) => {
           clearTimeout(killTimer);
           console.log(`[FFmpeg audio] Stream complete (code ${code})`);
+          if (!res.writableEnded) {
+            res.end();
+          }
         });
       } catch (e) {
         console.error('FFmpeg audio spawn failed, falling back to direct pipe:', e);
