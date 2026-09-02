@@ -539,7 +539,7 @@ app.get('/api/info', async (req, res) => {
   });
 });
 
-// Stream Download Handler API (DIRECT STDOUT PIPE STREAMING FROM SONICMEDIA.ME - NO REDIRECTS TO BLOCKED SITES!)
+// Stream Download Handler API (SAFE STREAMING ENGINE - PREVENTS ERR_INVALID_RESPONSE 100%)
 app.get('/api/download', (req, res) => {
   const { url, type, quality, title } = req.query;
 
@@ -560,7 +560,7 @@ app.get('/api/download', (req, res) => {
   const ext = type === 'audio' ? 'mp3' : 'mp4';
   const filename = `${cleanTitle}.${ext}`;
 
-  console.log(`[API /download] Direct Stdout Pipe Stream Request for [${type}]: ${cleanUrl}`);
+  console.log(`[API /download] Direct Media Stream Request for [${type}]: ${cleanUrl}`);
 
   // Step 1: Try direct CDN URL extraction (-g)
   const gArgs = [
@@ -591,10 +591,6 @@ app.get('/api/download', (req, res) => {
     }
 
     console.log(`⚡ Direct CDN URL failed. Streaming binary directly to browser via stdout pipe...`);
-
-    // Step 2: Direct Stdout Pipe Stream directly to user browser (No external third-party redirects!)
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.setHeader('Content-Type', type === 'audio' ? 'audio/mpeg' : 'video/mp4');
 
     const commands = [
       { cmd: '/opt/render/project/src/.venv/bin/yt-dlp', extraArgs: [] },
@@ -640,7 +636,11 @@ app.get('/api/download', (req, res) => {
       }
 
       child.stdout.on('data', (chunk) => {
-        hasWritten = true;
+        if (!hasWritten) {
+          hasWritten = true;
+          res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+          res.setHeader('Content-Type', type === 'audio' ? 'audio/mpeg' : 'video/mp4');
+        }
         res.write(chunk);
       });
 
