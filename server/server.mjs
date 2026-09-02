@@ -431,7 +431,7 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Debug endpoint to test yt-dlp availability on Render
+// Debug endpoint to test yt-dlp availability & pipe execution on Render
 app.get('/api/debug', (req, res) => {
   const testUrl = req.query.url || 'https://youtu.be/bKuL8VRXYKM';
   const results = [];
@@ -443,11 +443,21 @@ app.get('/api/debug', (req, res) => {
     return res.json({ testUrl, status: 'no_commands_found', YTDLP_BIN, exists: fs.existsSync(YTDLP_BIN) });
   }
 
+  const testPipeArgs = [
+    '-q',
+    '--no-progress',
+    '-o', '-',
+    '-f', '18/b/best',
+    '--extractor-args', 'youtube:player_client=mweb,android,web',
+    '--no-check-certificates',
+    '--no-playlist',
+    testUrl
+  ];
+
   commands.forEach(({ label, cmd, extraArgs }) => {
-    const args = [...extraArgs, '--version'];
     let py;
     try {
-      py = spawn(cmd, args);
+      py = spawn(cmd, [...extraArgs, ...testPipeArgs]);
     } catch (e) {
       results.push({ label, cmd, status: 'spawn_error', error: e.message });
       completed++;
@@ -455,17 +465,35 @@ app.get('/api/debug', (req, res) => {
       return;
     }
 
-    let stdout = '';
+    let bytesReceived = 0;
+    let first4BytesHex = '';
     let stderr = '';
-    py.stdout.on('data', d => stdout += d.toString());
+
+    py.stdout.on('data', d => {
+      if (bytesReceived === 0 && d.length >= 4) {
+        first4BytesHex = d.slice(0, 4).toString('hex');
+      }
+      bytesReceived += d.length;
+    });
+
     py.stderr.on('data', d => stderr += d.toString());
+
     py.on('error', (e) => {
       results.push({ label, cmd, status: 'error', error: e.message });
       completed++;
       if (completed === commands.length) res.json({ testUrl, commands: results });
     });
+
     py.on('close', (code) => {
-      results.push({ label, cmd, status: code === 0 ? 'ok' : 'fail', exitCode: code, version: stdout.trim(), stderr: stderr.slice(0, 200) });
+      results.push({
+        label,
+        cmd,
+        status: bytesReceived > 0 ? 'ok' : 'fail',
+        exitCode: code,
+        bytesReceived,
+        first4BytesHex,
+        stderr: stderr.slice(-300)
+      });
       completed++;
       if (completed === commands.length) res.json({ testUrl, commands: results });
     });
@@ -553,7 +581,7 @@ app.get('/api/info', async (req, res) => {
 
   const infoArgs = [
     '--dump-single-json',
-    '--extractor-args', 'youtube:player_client=android',
+    '--extractor-args', 'youtube:player_client=mweb,android,web',
     '--no-check-certificates',
     '--ignore-no-formats-error',
     '--no-warnings',
@@ -643,7 +671,7 @@ app.get('/api/download', (req, res) => {
     '--no-progress',
     '-o', '-',
     '-f', '18/b/best',
-    '--extractor-args', 'youtube:player_client=android',
+    '--extractor-args', 'youtube:player_client=mweb,android,web',
     '--no-check-certificates',
     '--ignore-no-formats-error',
     '--no-part',
