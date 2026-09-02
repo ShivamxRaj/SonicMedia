@@ -5,13 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "postinstall": "node node_modules/yt-dlp-exec/scripts/postinstall.js || true",
-    "build": "node node_modules/yt-dlp-exec/scripts/postinstall.js || true; vite build",
+    "postinstall": "python3 -m pip install yt-dlp || pip install yt-dlp || true",
+    "build": "python3 -m pip install yt-dlp || pip install yt-dlp || true; vite build",
     "preview": "vite preview",
     "server": "node server/server.mjs",
     "start": "node server/server.mjs"
   },
   "dependencies": {
+    "@distube/ytdl-core": "^4.16.10",
     "axios": "^1.7.9",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",

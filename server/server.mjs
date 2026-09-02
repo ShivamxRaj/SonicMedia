@@ -72,14 +72,14 @@ function getCommands() {
   const nodeModulesBin = path.join(process.cwd(), 'node_modules', 'yt-dlp-exec', 'bin', process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
 
   const candidates = [
+    { label: 'python3-m', cmd: 'python3', extraArgs: ['-m', 'yt_dlp'] },
+    { label: 'python-m', cmd: 'python', extraArgs: ['-m', 'yt_dlp'] },
+    { label: 'global-yt-dlp', cmd: 'yt-dlp', extraArgs: [] },
+    { label: 'render-venv-ytdlp', cmd: '/opt/render/project/src/.venv/bin/yt-dlp', extraArgs: [] },
+    { label: 'render-venv-python', cmd: '/opt/render/project/src/.venv/bin/python', extraArgs: ['-m', 'yt_dlp'] },
     { label: 'server-yt-dlp-bin', cmd: YTDLP_BIN, extraArgs: [] },
     { label: 'node-modules-yt-dlp-exec', cmd: nodeModulesBin, extraArgs: [] },
-    { label: 'render-venv-ytdlp', cmd: '/opt/render/project/src/.venv/bin/yt-dlp', extraArgs: [] },
-    { label: 'home-local-bin', cmd: homeBin, extraArgs: [] },
-    { label: 'render-venv-python', cmd: '/opt/render/project/src/.venv/bin/python', extraArgs: ['-m', 'yt_dlp'] },
-    { label: 'global-yt-dlp', cmd: 'yt-dlp', extraArgs: [] },
-    { label: 'python3-m', cmd: 'python3', extraArgs: ['-m', 'yt_dlp'] },
-    { label: 'python-m', cmd: 'python', extraArgs: ['-m', 'yt_dlp'] }
+    { label: 'home-local-bin', cmd: homeBin, extraArgs: [] }
   ];
 
   return candidates.filter(c => {
