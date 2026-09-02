@@ -495,7 +495,6 @@ app.get('/api/info', async (req, res) => {
     '--user-agent', MOBILE_USER_AGENT,
     '--referer', YOUTUBE_REFERER,
     '--ignore-no-formats-error',
-    '--force-ipv4',
     '--no-warnings',
     '--no-playlist',
     cleanUrl
@@ -551,7 +550,7 @@ app.get('/api/info', async (req, res) => {
   });
 });
 
-// Stream Download Handler API (HIGH-PERFORMANCE CDN DIRECT STREAM EXTRACTION)
+// Stream Download Handler API (HIGH-SPEED DUAL STACK IP STREAMING - NO FORCE-IPV4 RESTRICTION)
 app.get('/api/download', (req, res) => {
   const { url, type, quality, title } = req.query;
 
@@ -574,14 +573,13 @@ app.get('/api/download', (req, res) => {
 
   console.log(`[API /download] Direct Media Stream Request for [${type}]: ${cleanUrl}`);
 
-  // Step 1: Try direct CDN URL extraction (-g) with Android player client (without format filter for 100% extraction success)
+  // Step 1: Try direct CDN URL extraction (-g) with Android player client
   const gArgs = [
     '-g',
     '--extractor-args', 'youtube:player_client=android',
     '--user-agent', MOBILE_USER_AGENT,
     '--referer', YOUTUBE_REFERER,
     '--ignore-no-formats-error',
-    '--force-ipv4',
     '--no-warnings',
     '--no-playlist',
     cleanUrl
@@ -624,7 +622,6 @@ app.get('/api/download', (req, res) => {
       '--referer', YOUTUBE_REFERER,
       '--ignore-no-formats-error',
       '--no-part',
-      '--force-ipv4',
       '--no-warnings',
       '--no-playlist',
       cleanUrl
