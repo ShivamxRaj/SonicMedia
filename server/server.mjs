@@ -602,7 +602,7 @@ app.get('/api/info', async (req, res) => {
 });
 
 // Stream Download Handler API (ZERO-REDIRECT BINARY PIPE ENGINE)
-// ALWAYS pipe binary stream through our Express server using yt-dlp -o - stdout.
+// ALWAYS pipe binary stream through our Express server using pre-merged format 18/b/best.
 app.get('/api/download', (req, res) => {
   const { url, type, quality, title } = req.query;
 
@@ -627,10 +627,10 @@ app.get('/api/download', (req, res) => {
 
   const commands = getCommands();
 
-  // Always pipe binary to stdout — NEVER redirect to external URLs
+  // Always pipe binary to stdout — use pre-merged format 18/b/best to avoid requiring FFmpeg on cloud containers
   const pipeArgs = [
     '-o', '-',
-    '-f', type === 'audio' ? '140/ba/b/bestaudio/best' : '18/22/b/best',
+    '-f', '18/b/best',
     '--extractor-args', 'youtube:player_client=android',
     '--no-check-certificates',
     '--ignore-no-formats-error',
