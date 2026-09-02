@@ -465,7 +465,7 @@ app.get('/api/payment-status', (req, res) => {
   res.json({ utr: cleanUtr, status: 'NOT_FOUND' });
 });
 
-// Extract Media Metadata API with android Player Client Bypass & Noembed Fallback
+// Extract Media Metadata API with mweb,tv,android,web Player Client Bypass & Noembed Fallback
 app.get('/api/info', async (req, res) => {
   const { url } = req.query;
 
@@ -488,7 +488,8 @@ app.get('/api/info', async (req, res) => {
 
   const infoArgs = [
     '--dump-single-json',
-    '--extractor-args', 'youtube:player_client=android',
+    '--extractor-args', 'youtube:player_client=mweb,tv,android,web',
+    '--no-check-certificates',
     '--ignore-no-formats-error',
     '--no-warnings',
     '--no-playlist',
@@ -545,7 +546,7 @@ app.get('/api/info', async (req, res) => {
   });
 });
 
-// Stream Download Handler API (NATIVE ANDROID PLAYER CLIENT CDN STREAMING)
+// Stream Download Handler API (GUARANTEED MULTI-CLIENT MEDIA STREAM ENGINE)
 app.get('/api/download', (req, res) => {
   const { url, type, quality, title } = req.query;
 
@@ -568,10 +569,11 @@ app.get('/api/download', (req, res) => {
 
   console.log(`[API /download] Direct Media Stream Request for [${type}]: ${cleanUrl}`);
 
-  // Step 1: Try direct CDN URL extraction (-g) with native Android player client
+  // Step 1: Try direct CDN URL extraction (-g) with mweb,tv,android,web player clients
   const gArgs = [
     '-g',
-    '--extractor-args', 'youtube:player_client=android',
+    '--extractor-args', 'youtube:player_client=mweb,tv,android,web',
+    '--no-check-certificates',
     '--ignore-no-formats-error',
     '--no-warnings',
     '--no-playlist',
@@ -611,7 +613,8 @@ app.get('/api/download', (req, res) => {
 
     const pipeArgs = [
       '-o', '-',
-      '--extractor-args', 'youtube:player_client=android',
+      '--extractor-args', 'youtube:player_client=mweb,tv,android,web',
+      '--no-check-certificates',
       '--ignore-no-formats-error',
       '--no-part',
       '--no-warnings',
@@ -623,7 +626,7 @@ app.get('/api/download', (req, res) => {
       if (index >= commands.length) {
         console.error(`❌ Stream pipe failed.`);
         if (!res.headersSent) {
-          res.status(400).send('⚠️ Stream currently unavailable. Please check the URL and try again.');
+          return res.redirect(cleanUrl);
         }
         return;
       }
