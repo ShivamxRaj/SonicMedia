@@ -689,14 +689,17 @@ app.get('/api/download', (req, res) => {
   const FFMPEG_BIN = path.join(process.cwd(), 'node_modules', 'ffmpeg-static', process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg');
   const hasFfmpeg = fs.existsSync(FFMPEG_BIN);
 
-  const pipeArgs = [
-    '-q',
-    '--no-progress',
-    '-o', '-'
-  ];
-
   if (type === 'audio') {
-    pipeArgs.push(
+    // 🎵 Seekable MP3 Temp Conversion for 100% Valid Xing/LAME Headers & Full Track Duration
+    const tempDir = path.join(process.cwd(), 'server', 'temp');
+    if (!fs.existsSync(tempDir)) {
+      try { fs.mkdirSync(tempDir, { recursive: true }); } catch (e) {}
+    }
+    const tempFilePath = path.join(tempDir, `audio_${Date.now()}_${Math.random().toString(36).substring(7)}.mp3`);
+
+    const audioArgs = [
+      '-q',
+      '--no-progress',
       '-x',
       '--audio-format', 'mp3',
       '--audio-quality', '0',
@@ -704,32 +707,102 @@ app.get('/api/download', (req, res) => {
       '--no-check-certificates',
       '--ignore-no-formats-error',
       '--no-part',
-      '--no-playlist'
-    );
-  } else {
-    let formatString = 'bestvideo+bestaudio/best';
-    if (quality) {
-      const qLower = quality.toLowerCase();
-      if (qLower.includes('2160') || qLower.includes('4k') || qLower.includes('8k')) {
-        formatString = 'bestvideo[height<=2160]+bestaudio/bestvideo+bestaudio/best';
-      } else if (qLower.includes('1080')) {
-        formatString = 'bestvideo[height<=1080]+bestaudio/bestvideo+bestaudio/best';
-      } else if (qLower.includes('720')) {
-        formatString = 'bestvideo[height<=720]+bestaudio/bestvideo+bestaudio/best';
-      } else if (qLower.includes('480')) {
-        formatString = 'bestvideo[height<=480]+bestaudio/bestvideo+bestaudio/best';
-      }
+      '--no-playlist',
+      '-o', tempFilePath
+    ];
+    if (hasFfmpeg) {
+      audioArgs.push('--ffmpeg-location', FFMPEG_BIN);
     }
-    pipeArgs.push(
-      '-f', formatString,
-      '--merge-output-format', 'mp4',
-      '--user-agent', '',
-      '--no-check-certificates',
-      '--ignore-no-formats-error',
-      '--no-part',
-      '--no-playlist'
-    );
+    audioArgs.push(cleanUrl);
+
+    function tryAudioConvert(index) {
+      if (index >= commands.length) {
+        console.error(`❌ All audio extraction strategies failed for: ${cleanUrl}`);
+        if (!res.headersSent) {
+          res.status(500).send('⚠️ Audio download failed. Stream temporarily unavailable.');
+        }
+        return;
+      }
+
+      const { cmd, extraArgs, label, env } = commands[index];
+      console.log(`[tryAudioConvert ${label}] Converting audio to seekable MP3...`);
+
+      let child;
+      let stderrLog = '';
+
+      try {
+        child = spawn(cmd, [...extraArgs, ...audioArgs], { env: env || process.env });
+      } catch (e) {
+        console.error(`[tryAudioConvert ${label}] spawn error:`, e.message);
+        return tryAudioConvert(index + 1);
+      }
+
+      const killTimer = setTimeout(() => {
+        try { child.kill('SIGKILL'); } catch (e) {}
+      }, 900000);
+
+      child.stderr.on('data', (d) => { stderrLog += d.toString(); });
+
+      child.on('close', (exitCode) => {
+        clearTimeout(killTimer);
+        if (fs.existsSync(tempFilePath) && fs.statSync(tempFilePath).size > 1000) {
+          const stat = fs.statSync(tempFilePath);
+          console.log(`[tryAudioConvert ${label}] ✅ MP3 converted successfully (${(stat.size / 1024 / 1024).toFixed(2)} MB), streaming to browser...`);
+
+          res.setHeader('Content-Type', 'audio/mpeg');
+          res.setHeader('Content-Length', stat.size);
+          res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
+          res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Disposition, X-Filename');
+          res.setHeader('X-Filename', encodeURIComponent(filename));
+
+          const readStream = fs.createReadStream(tempFilePath);
+          readStream.pipe(res);
+
+          const cleanup = () => {
+            try { if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath); } catch (e) {}
+          };
+          res.on('finish', cleanup);
+          res.on('close', cleanup);
+          req.on('close', () => {
+            try { child.kill('SIGKILL'); } catch (e) {}
+            cleanup();
+          });
+        } else {
+          console.error(`[tryAudioConvert ${label}] conversion failed (code ${exitCode}). stderr: ${stderrLog.slice(-300)}`);
+          tryAudioConvert(index + 1);
+        }
+      });
+    }
+
+    return tryAudioConvert(0);
   }
+
+  let formatString = 'bestvideo+bestaudio/best';
+  if (quality) {
+    const qLower = quality.toLowerCase();
+    if (qLower.includes('2160') || qLower.includes('4k') || qLower.includes('8k')) {
+      formatString = 'bestvideo[height<=2160]+bestaudio/bestvideo+bestaudio/best';
+    } else if (qLower.includes('1080')) {
+      formatString = 'bestvideo[height<=1080]+bestaudio/bestvideo+bestaudio/best';
+    } else if (qLower.includes('720')) {
+      formatString = 'bestvideo[height<=720]+bestaudio/bestvideo+bestaudio/best';
+    } else if (qLower.includes('480')) {
+      formatString = 'bestvideo[height<=480]+bestaudio/bestvideo+bestaudio/best';
+    }
+  }
+
+  const pipeArgs = [
+    '-q',
+    '--no-progress',
+    '-o', '-',
+    '-f', formatString,
+    '--merge-output-format', 'mp4',
+    '--user-agent', '',
+    '--no-check-certificates',
+    '--ignore-no-formats-error',
+    '--no-part',
+    '--no-playlist'
+  ];
 
   if (hasFfmpeg) {
     pipeArgs.push('--ffmpeg-location', FFMPEG_BIN);
