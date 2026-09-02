@@ -66,10 +66,10 @@ function getCommands() {
   const nodeModulesBin = path.join(process.cwd(), 'node_modules', 'yt-dlp-exec', 'bin', process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
 
   const candidates = [
-    { label: 'server-yt-dlp-bin', cmd: YTDLP_BIN, extraArgs: [] },
     { label: 'node-modules-yt-dlp-exec', cmd: nodeModulesBin, extraArgs: [] },
-    { label: 'home-local-bin', cmd: homeBin, extraArgs: [] },
     { label: 'render-venv-ytdlp', cmd: '/opt/render/project/src/.venv/bin/yt-dlp', extraArgs: [] },
+    { label: 'server-yt-dlp-bin', cmd: YTDLP_BIN, extraArgs: [] },
+    { label: 'home-local-bin', cmd: homeBin, extraArgs: [] },
     { label: 'render-venv-python', cmd: '/opt/render/project/src/.venv/bin/python', extraArgs: ['-m', 'yt_dlp'] },
     { label: 'global-yt-dlp', cmd: 'yt-dlp', extraArgs: [] },
     { label: 'python3-m', cmd: 'python3', extraArgs: ['-m', 'yt_dlp'] },
@@ -448,7 +448,7 @@ app.get('/api/debug', (req, res) => {
     '--no-progress',
     '-o', '-',
     '-f', '18/b/best',
-    '--extractor-args', 'youtube:player_client=mweb,tv,android,web',
+    '--extractor-args', 'youtube:player_client=android',
     '--no-check-certificates',
     '--no-playlist',
     testUrl
@@ -581,7 +581,7 @@ app.get('/api/info', async (req, res) => {
 
   const infoArgs = [
     '--dump-single-json',
-    '--extractor-args', 'youtube:player_client=mweb,tv,android,web',
+    '--extractor-args', 'youtube:player_client=android',
     '--no-check-certificates',
     '--ignore-no-formats-error',
     '--no-warnings',
@@ -665,13 +665,13 @@ app.get('/api/download', (req, res) => {
 
   const commands = getCommands();
 
-  // Always pipe pure binary to stdout using mweb,tv,android,web player clients
+  // Always pipe pure binary to stdout using android player client
   const pipeArgs = [
     '-q',
     '--no-progress',
     '-o', '-',
     '-f', '18/b/best',
-    '--extractor-args', 'youtube:player_client=mweb,tv,android,web',
+    '--extractor-args', 'youtube:player_client=android',
     '--no-check-certificates',
     '--ignore-no-formats-error',
     '--no-part',
