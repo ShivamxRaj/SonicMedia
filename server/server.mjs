@@ -544,7 +544,7 @@ app.get('/api/info', async (req, res) => {
   });
 });
 
-// Stream Download Handler API (HIGH-PERFORMANCE MEDIA STREAM EXTRACTION WITH UA + REFERER HEADERS)
+// Stream Download Handler API (HIGH-PERFORMANCE MEDIA STREAM EXTRACTION WITH FORMAT 140/BA)
 app.get('/api/download', (req, res) => {
   const { url, type, quality, title } = req.query;
 
@@ -567,10 +567,11 @@ app.get('/api/download', (req, res) => {
 
   console.log(`[API /download] Direct Media Stream Request for [${type}]: ${cleanUrl}`);
 
-  // Step 1: Try direct CDN URL extraction (-g) with Mobile User-Agent & Referer
+  // Step 1: Try direct CDN URL extraction (-g) with Format 140 for Audio and Format 18 for Video
+  const formatFilter = type === 'audio' ? '140/ba/b/bestaudio/best' : '18/22/b/best';
   const gArgs = [
     '-g',
-    '-f', type === 'audio' ? 'ba/b/bestaudio' : '18/22/b/best',
+    '-f', formatFilter,
     '--extractor-args', 'youtube:player_client=android',
     '--user-agent', MOBILE_USER_AGENT,
     '--referer', YOUTUBE_REFERER,
@@ -613,7 +614,7 @@ app.get('/api/download', (req, res) => {
 
     const pipeArgs = [
       '-o', '-',
-      '-f', type === 'audio' ? 'ba/b/bestaudio' : '18/22/b/best',
+      '-f', formatFilter,
       '--extractor-args', 'youtube:player_client=android',
       '--user-agent', MOBILE_USER_AGENT,
       '--referer', YOUTUBE_REFERER,
