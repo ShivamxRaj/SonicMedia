@@ -60,8 +60,8 @@ function getCommands() {
   const nodeModulesBin = path.join(process.cwd(), 'node_modules', 'yt-dlp-exec', 'bin', process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
 
   const candidates = [
-    { label: 'server-yt-dlp-bin', cmd: YTDLP_BIN, extraArgs: [] },
     { label: 'node-modules-yt-dlp-exec', cmd: nodeModulesBin, extraArgs: [] },
+    { label: 'server-yt-dlp-bin', cmd: YTDLP_BIN, extraArgs: [] },
     { label: 'home-local-bin', cmd: homeBin, extraArgs: [] },
     { label: 'render-venv-ytdlp', cmd: '/opt/render/project/src/.venv/bin/yt-dlp', extraArgs: [] },
     { label: 'render-venv-python', cmd: '/opt/render/project/src/.venv/bin/python', extraArgs: ['-m', 'yt_dlp'] },
@@ -674,7 +674,7 @@ app.get('/api/download', (req, res) => {
       if (!hasWritten) {
         hasWritten = true;
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-        res.setHeader('Content-Type', type === 'audio' ? 'audio/mpeg' : 'video/mp4');
+        res.setHeader('Content-Type', 'video/mp4');
         console.log(`[tryPipe ${label}] ✅ First chunk received, streaming to browser...`);
       }
       res.write(chunk);
