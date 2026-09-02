@@ -588,11 +588,11 @@ app.get('/api/download', (req, res) => {
   // Always pipe binary to stdout — NEVER redirect to external URLs
   const pipeArgs = [
     '-o', '-',
-    '--extractor-args', 'youtube:player_client=mweb,tv,android,web',
+    '-f', type === 'audio' ? '140/ba/b/bestaudio/best' : '18/22/b/best',
+    '--extractor-args', 'youtube:player_client=android',
     '--no-check-certificates',
     '--ignore-no-formats-error',
     '--no-part',
-    '--no-warnings',
     '--no-playlist',
     cleanUrl
   ];
@@ -610,34 +610,55 @@ app.get('/api/download', (req, res) => {
     const { cmd, extraArgs } = commands[index];
     let child;
     let hasWritten = false;
+    let stderrLog = '';
 
     try {
       child = spawn(cmd, [...extraArgs, ...pipeArgs]);
     } catch (e) {
+      console.error(`[tryPipe ${index}] spawn error for ${cmd}:`, e.message);
       return tryPipe(index + 1);
     }
+
+    // 45-second timeout to kill stuck processes
+    const killTimer = setTimeout(() => {
+      console.error(`[tryPipe ${index}] TIMEOUT 45s for ${cmd}, killing process`);
+      try { child.kill('SIGKILL'); } catch (e) {}
+    }, 45000);
+
+    child.stderr.on('data', (d) => {
+      stderrLog += d.toString();
+    });
 
     child.stdout.on('data', (chunk) => {
       if (!hasWritten) {
         hasWritten = true;
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
         res.setHeader('Content-Type', type === 'audio' ? 'audio/mpeg' : 'video/mp4');
+        console.log(`[tryPipe ${index}] ✅ First chunk received from ${cmd}, streaming to browser...`);
       }
       res.write(chunk);
     });
 
-    child.on('error', () => {
+    child.on('error', (err) => {
+      clearTimeout(killTimer);
+      console.error(`[tryPipe ${index}] process error for ${cmd}:`, err.message);
       if (!hasWritten) tryPipe(index + 1);
     });
 
     child.on('close', (exitCode) => {
+      clearTimeout(killTimer);
       if (!hasWritten && exitCode !== 0) {
+        console.error(`[tryPipe ${index}] ${cmd} exited with code ${exitCode}. stderr: ${stderrLog.slice(-300)}`);
         return tryPipe(index + 1);
+      }
+      if (hasWritten) {
+        console.log(`[tryPipe ${index}] ✅ Stream completed for ${cmd}`);
       }
       res.end();
     });
 
     req.on('close', () => {
+      clearTimeout(killTimer);
       try { child.kill(); } catch (e) {}
     });
   }
