@@ -678,14 +678,6 @@ app.get('/api/download', (req, res) => {
   const ext = type === 'audio' ? 'mp3' : 'mp4';
   const filename = `${safeAsciiTitle}.${ext}`;
 
-  res.setHeader('Content-Type', type === 'audio' ? 'audio/mpeg' : 'video/mp4');
-  res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
-  res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Disposition, X-Filename');
-  res.setHeader('X-Filename', encodeURIComponent(filename));
-  if (typeof res.flushHeaders === 'function') {
-    res.flushHeaders();
-  }
-
   console.log(`[API /download] Direct Media Stream Request for [${type} - ${quality || 'best'}]: ${cleanUrl} -> ${filename}`);
 
   const commands = getCommands();
@@ -758,6 +750,17 @@ app.get('/api/download', (req, res) => {
         if (fs.existsSync(tempFilePath) && fs.statSync(tempFilePath).size > 1000) {
           const stat = fs.statSync(tempFilePath);
           console.log(`[tryAudioConvert ${label}] ✅ MP3 converted successfully (${(stat.size / 1024 / 1024).toFixed(2)} MB), streaming to browser...`);
+
+          if (!res.headersSent) {
+            res.setHeader('Content-Type', 'audio/mpeg');
+            res.setHeader('Content-Length', stat.size);
+            res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
+            res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Disposition, X-Filename');
+            res.setHeader('X-Filename', encodeURIComponent(filename));
+            if (typeof res.flushHeaders === 'function') {
+              res.flushHeaders();
+            }
+          }
 
           const readStream = fs.createReadStream(tempFilePath);
           readStream.pipe(res);
