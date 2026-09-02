@@ -12,8 +12,9 @@ app.use(cors());
 app.use(express.json());
 
 const YTDLP_BIN = path.join(process.cwd(), 'server', process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
+const YTDLP_TMP = path.join(process.cwd(), 'server', process.platform === 'win32' ? 'yt-dlp.tmp.exe' : 'yt-dlp.tmp');
 
-// Download standalone yt-dlp binary if missing
+// Download standalone yt-dlp binary atomically via temp file
 function ensureYtDlpBinary(callback) {
   if (fs.existsSync(YTDLP_BIN)) {
     try { fs.chmodSync(YTDLP_BIN, '755'); } catch (e) {}
@@ -21,7 +22,7 @@ function ensureYtDlpBinary(callback) {
     return YTDLP_BIN;
   }
 
-  console.log(`⏳ Downloading official standalone yt-dlp binary to ${YTDLP_BIN}...`);
+  console.log(`⏳ Downloading official standalone yt-dlp binary to ${YTDLP_TMP}...`);
   const downloadUrl = process.platform === 'win32'
     ? 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe'
     : 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp';
@@ -31,15 +32,20 @@ function ensureYtDlpBinary(callback) {
       if (response.statusCode === 301 || response.statusCode === 302) {
         return fetchUrl(response.headers.location);
       }
-      const file = fs.createWriteStream(YTDLP_BIN);
+      const file = fs.createWriteStream(YTDLP_TMP);
       response.pipe(file);
       file.on('finish', () => {
         file.close(() => {
           if (process.platform !== 'win32') {
-            try { fs.chmodSync(YTDLP_BIN, '755'); } catch (e) {}
+            try { fs.chmodSync(YTDLP_TMP, '755'); } catch (e) {}
           }
-          console.log(`✅ Standalone yt-dlp binary downloaded successfully: ${YTDLP_BIN}`);
-          if (callback) callback(YTDLP_BIN);
+          try {
+            fs.renameSync(YTDLP_TMP, YTDLP_BIN);
+            console.log(`✅ Standalone yt-dlp binary ready: ${YTDLP_BIN}`);
+            if (callback) callback(YTDLP_BIN);
+          } catch (err) {
+            console.error('Failed to rename temp yt-dlp binary:', err);
+          }
         });
       });
     }).on('error', (err) => {
@@ -72,7 +78,11 @@ function getCommands() {
 
   return candidates.filter(c => {
     if (path.isAbsolute(c.cmd)) {
-      return fs.existsSync(c.cmd);
+      try {
+        return fs.existsSync(c.cmd) && fs.statSync(c.cmd).size > 1000000;
+      } catch (e) {
+        return false;
+      }
     }
     return true;
   });
