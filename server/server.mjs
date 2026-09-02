@@ -13,9 +13,6 @@ app.use(express.json());
 
 const YTDLP_BIN = path.join(process.cwd(), 'server', process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
 
-const MOBILE_USER_AGENT = 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36';
-const YOUTUBE_REFERER = 'https://www.youtube.com/';
-
 // Auto-downloader for official standalone yt-dlp binary (runs in background)
 function ensureYtDlpBinary(callback) {
   if (fs.existsSync(YTDLP_BIN)) {
@@ -468,7 +465,7 @@ app.get('/api/payment-status', (req, res) => {
   res.json({ utr: cleanUtr, status: 'NOT_FOUND' });
 });
 
-// Extract Media Metadata API with Mobile User-Agent + Referer headers
+// Extract Media Metadata API with android Player Client Bypass & Noembed Fallback
 app.get('/api/info', async (req, res) => {
   const { url } = req.query;
 
@@ -492,8 +489,6 @@ app.get('/api/info', async (req, res) => {
   const infoArgs = [
     '--dump-single-json',
     '--extractor-args', 'youtube:player_client=android',
-    '--user-agent', MOBILE_USER_AGENT,
-    '--referer', YOUTUBE_REFERER,
     '--ignore-no-formats-error',
     '--no-warnings',
     '--no-playlist',
@@ -550,7 +545,7 @@ app.get('/api/info', async (req, res) => {
   });
 });
 
-// Stream Download Handler API (HIGH-SPEED DUAL STACK IP STREAMING - NO FORCE-IPV4 RESTRICTION)
+// Stream Download Handler API (NATIVE ANDROID PLAYER CLIENT CDN STREAMING)
 app.get('/api/download', (req, res) => {
   const { url, type, quality, title } = req.query;
 
@@ -573,19 +568,17 @@ app.get('/api/download', (req, res) => {
 
   console.log(`[API /download] Direct Media Stream Request for [${type}]: ${cleanUrl}`);
 
-  // Step 1: Try direct CDN URL extraction (-g) with Android player client
+  // Step 1: Try direct CDN URL extraction (-g) with native Android player client
   const gArgs = [
     '-g',
     '--extractor-args', 'youtube:player_client=android',
-    '--user-agent', MOBILE_USER_AGENT,
-    '--referer', YOUTUBE_REFERER,
     '--ignore-no-formats-error',
     '--no-warnings',
     '--no-playlist',
     cleanUrl
   ];
 
-  runYtDlp(gArgs, (code, stdoutData) => {
+  runYtDlp(gArgs, (code, stdoutData, stderrData) => {
     if (code === 0 && stdoutData) {
       const cdnUrls = stdoutData.trim().split('\n').filter(Boolean);
       let directCdnUrl = null;
@@ -601,6 +594,7 @@ app.get('/api/download', (req, res) => {
       }
     }
 
+    console.error(`yt-dlp -g stderr:`, stderrData);
     console.log(`⚡ Direct CDN URL failed. Streaming binary directly to browser via stdout pipe...`);
 
     const commands = [
@@ -618,8 +612,6 @@ app.get('/api/download', (req, res) => {
     const pipeArgs = [
       '-o', '-',
       '--extractor-args', 'youtube:player_client=android',
-      '--user-agent', MOBILE_USER_AGENT,
-      '--referer', YOUTUBE_REFERER,
       '--ignore-no-formats-error',
       '--no-part',
       '--no-warnings',
