@@ -776,7 +776,16 @@ app.get('/api/download', (req, res) => {
             hasWritten = true;
             console.log(`[tryPipe ${label} -> FFmpeg] ✅ Pure MP3 audio stream active (${audioBitrate}), piping to browser as [${filename}]...`);
           }
-          res.write(chunk);
+          const canWrite = res.write(chunk);
+          if (!canWrite && ffmpegProc.stdout.pause) {
+            ffmpegProc.stdout.pause();
+          }
+        });
+
+        res.on('drain', () => {
+          if (ffmpegProc && ffmpegProc.stdout && ffmpegProc.stdout.resume) {
+            ffmpegProc.stdout.resume();
+          }
         });
 
         ffmpegProc.on('error', (err) => {
@@ -799,7 +808,16 @@ app.get('/api/download', (req, res) => {
           hasWritten = true;
           console.log(`[tryPipe ${label}] ✅ First binary chunk received, streaming to browser as [${filename}]...`);
         }
-        res.write(chunk);
+        const canWrite = res.write(chunk);
+        if (!canWrite && child.stdout.pause) {
+          child.stdout.pause();
+        }
+      });
+
+      res.on('drain', () => {
+        if (child && child.stdout && child.stdout.resume) {
+          child.stdout.resume();
+        }
       });
     }
 
@@ -813,7 +831,7 @@ app.get('/api/download', (req, res) => {
       clearTimeout(killTimer);
       if (!hasWritten && exitCode !== 0) {
         console.error(`[tryPipe ${label}] exited with code ${exitCode}. stderr: ${stderrLog.slice(-300)}`);
-        if (ffmpegProc) try { ffmpegProc.kill(); } catch (e) {}
+        if (ffmpegProc) try { ffmpegProc.kill('SIGKILL'); } catch (e) {}
         return tryPipe(index + 1);
       }
       if (!ffmpegProc) {
@@ -824,10 +842,14 @@ app.get('/api/download', (req, res) => {
       }
     });
 
-    req.on('close', () => {
+    const cleanup = () => {
       clearTimeout(killTimer);
-      try { child.kill(); } catch (e) {}
-      if (ffmpegProc) try { ffmpegProc.kill(); } catch (e) {}
+      try { child.kill('SIGKILL'); } catch (e) {}
+      if (ffmpegProc) try { ffmpegProc.kill('SIGKILL'); } catch (e) {}
+    };
+
+    req.on('close', cleanup);
+    res.on('close', cleanup);
     });
   }
 
