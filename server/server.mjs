@@ -52,13 +52,6 @@ function ensureYtDlpBinary(callback) {
 // Start downloading binary asynchronously in background
 ensureYtDlpBinary();
 
-// Helper to extract YouTube Video ID
-function extractYouTubeId(url) {
-  if (!url) return null;
-  const m = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/i);
-  return m ? m[1] : null;
-}
-
 // Dynamic Sitemap.xml endpoint for Googlebot Indexer
 app.get('/sitemap.xml', (req, res) => {
   res.header('Content-Type', 'application/xml');
@@ -546,7 +539,7 @@ app.get('/api/info', async (req, res) => {
   });
 });
 
-// Stream Download Handler API (HIGH-SPEED RESILIENT 3-LAYER STREAM ENGINE - 100% DOWNLOAD GUARANTEE!)
+// Stream Download Handler API (DIRECT STDOUT PIPE STREAMING FROM SONICMEDIA.ME - NO REDIRECTS TO BLOCKED SITES!)
 app.get('/api/download', (req, res) => {
   const { url, type, quality, title } = req.query;
 
@@ -563,59 +556,112 @@ app.get('/api/download', (req, res) => {
     return res.status(400).send('⚠️ Valid video or music URL is required.');
   }
 
-  console.log(`[API /download] Direct Media Stream Request for [${type}]: ${cleanUrl}`);
+  const cleanTitle = (title || 'sonicmedia-download').replace(/[^a-zA-Z0-9_-]/g, '_');
+  const ext = type === 'audio' ? 'mp3' : 'mp4';
+  const filename = `${cleanTitle}.${ext}`;
 
-  // Multi-tier stream extraction strategy chain
-  function attemptStream(formatFilter) {
-    const gArgs = [
-      '-g',
-      '--extractor-args', 'youtube:player_client=android,web',
-      '--ignore-no-formats-error',
-      '--force-ipv4',
-      '--no-warnings',
-      '--no-playlist'
+  console.log(`[API /download] Direct Stdout Pipe Stream Request for [${type}]: ${cleanUrl}`);
+
+  // Step 1: Try direct CDN URL extraction (-g)
+  const gArgs = [
+    '-g',
+    '-f', type === 'audio' ? 'ba/b/bestaudio' : '18/22/b/best',
+    '--extractor-args', 'youtube:player_client=android,web',
+    '--ignore-no-formats-error',
+    '--force-ipv4',
+    '--no-warnings',
+    '--no-playlist',
+    cleanUrl
+  ];
+
+  runYtDlp(gArgs, (code, stdoutData) => {
+    if (code === 0 && stdoutData) {
+      const cdnUrls = stdoutData.trim().split('\n').filter(Boolean);
+      let directCdnUrl = null;
+      if (type === 'audio') {
+        directCdnUrl = cdnUrls.find(u => u.includes('mime=audio')) || cdnUrls[cdnUrls.length - 1] || cdnUrls[0];
+      } else {
+        directCdnUrl = cdnUrls[0];
+      }
+
+      if (directCdnUrl && directCdnUrl.startsWith('http')) {
+        console.log(`⚡ Direct CDN Stream Link Found! Redirecting browser directly to GoogleVideo CDN...`);
+        return res.redirect(directCdnUrl);
+      }
+    }
+
+    console.log(`⚡ Direct CDN URL failed. Streaming binary directly to browser via stdout pipe...`);
+
+    // Step 2: Direct Stdout Pipe Stream directly to user browser (No external third-party redirects!)
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Type', type === 'audio' ? 'audio/mpeg' : 'video/mp4');
+
+    const commands = [
+      { cmd: '/opt/render/project/src/.venv/bin/yt-dlp', extraArgs: [] },
+      { cmd: '/opt/render/project/src/.venv/bin/python', extraArgs: ['-m', 'yt_dlp'] },
+      { cmd: 'yt-dlp', extraArgs: [] },
+      { cmd: 'python3', extraArgs: ['-m', 'yt_dlp'] },
+      { cmd: 'python', extraArgs: ['-m', 'yt_dlp'] }
     ];
 
-    if (formatFilter) {
-      gArgs.push('-f', formatFilter);
+    if (fs.existsSync(YTDLP_BIN)) {
+      commands.unshift({ cmd: YTDLP_BIN, extraArgs: [] });
     }
-    gArgs.push(cleanUrl);
 
-    runYtDlp(gArgs, (code, stdoutData) => {
-      if (code === 0 && stdoutData) {
-        const cdnUrls = stdoutData.trim().split('\n').filter(Boolean);
-        let directCdnUrl = null;
-        if (type === 'audio') {
-          directCdnUrl = cdnUrls.find(u => u.includes('mime=audio')) || cdnUrls[cdnUrls.length - 1] || cdnUrls[0];
-        } else {
-          directCdnUrl = cdnUrls[0];
+    const pipeArgs = [
+      '-o', '-',
+      '-f', type === 'audio' ? 'ba/b/bestaudio' : '18/22/b/best',
+      '--extractor-args', 'youtube:player_client=android,web',
+      '--ignore-no-formats-error',
+      '--no-part',
+      '--force-ipv4',
+      '--no-warnings',
+      '--no-playlist',
+      cleanUrl
+    ];
+
+    function tryPipe(index) {
+      if (index >= commands.length) {
+        console.error(`❌ Stream pipe failed.`);
+        if (!res.headersSent) {
+          res.status(400).send('⚠️ Stream currently unavailable. Please check the URL and try again.');
         }
+        return;
+      }
 
-        if (directCdnUrl && directCdnUrl.startsWith('http')) {
-          console.log(`⚡ Direct High-Quality Media Stream Found! Redirecting browser...`);
-          return res.redirect(directCdnUrl);
+      const { cmd, extraArgs } = commands[index];
+      let child;
+      let hasWritten = false;
+
+      try {
+        child = spawn(cmd, [...extraArgs, ...pipeArgs]);
+      } catch (e) {
+        return tryPipe(index + 1);
+      }
+
+      child.stdout.on('data', (chunk) => {
+        hasWritten = true;
+        res.write(chunk);
+      });
+
+      child.on('error', () => {
+        if (!hasWritten) tryPipe(index + 1);
+      });
+
+      child.on('close', (exitCode) => {
+        if (!hasWritten && exitCode !== 0) {
+          return tryPipe(index + 1);
         }
-      }
+        res.end();
+      });
 
-      // If format filter failed, try without format filter
-      if (formatFilter) {
-        console.log(`⚠️ Specified format failed. Trying fallback without format filter...`);
-        return attemptStream(null);
-      }
+      req.on('close', () => {
+        try { child.kill(); } catch (e) {}
+      });
+    }
 
-      // Layer 3 Ultimate Fallback for YouTube Videos: Redirect to high-speed web converter
-      const ytId = extractYouTubeId(cleanUrl);
-      if (ytId) {
-        console.log(`⚡ Redirecting to Layer 3 high-speed download gateway for YouTube ID: ${ytId}`);
-        return res.redirect(`https://y2mate.is/watch?v=${ytId}`);
-      }
-
-      res.status(400).send('⚠️ Direct stream currently unavailable. Please re-fetch video link.');
-    });
-  }
-
-  const primaryFormat = type === 'audio' ? 'ba/b/bestaudio/b/best' : 'b/best/18/22/ba';
-  attemptStream(primaryFormat);
+    tryPipe(0);
+  });
 });
 
 // Fallback to index.html for SPA routing
