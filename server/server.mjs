@@ -66,8 +66,8 @@ function getCommands() {
   const nodeModulesBin = path.join(process.cwd(), 'node_modules', 'yt-dlp-exec', 'bin', process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
 
   const candidates = [
-    { label: 'node-modules-yt-dlp-exec', cmd: nodeModulesBin, extraArgs: [] },
     { label: 'server-yt-dlp-bin', cmd: YTDLP_BIN, extraArgs: [] },
+    { label: 'node-modules-yt-dlp-exec', cmd: nodeModulesBin, extraArgs: [] },
     { label: 'home-local-bin', cmd: homeBin, extraArgs: [] },
     { label: 'render-venv-ytdlp', cmd: '/opt/render/project/src/.venv/bin/yt-dlp', extraArgs: [] },
     { label: 'render-venv-python', cmd: '/opt/render/project/src/.venv/bin/python', extraArgs: ['-m', 'yt_dlp'] },
@@ -637,8 +637,10 @@ app.get('/api/download', (req, res) => {
 
   const commands = getCommands();
 
-  // Always pipe binary to stdout — use pre-merged format 18/b/best to avoid requiring FFmpeg on cloud containers
+  // Always pipe pure binary to stdout using -q (--quiet) and --no-progress to suppress text logs
   const pipeArgs = [
+    '-q',
+    '--no-progress',
     '-o', '-',
     '-f', '18/b/best',
     '--extractor-args', 'youtube:player_client=android',
@@ -685,7 +687,7 @@ app.get('/api/download', (req, res) => {
         hasWritten = true;
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
         res.setHeader('Content-Type', 'video/mp4');
-        console.log(`[tryPipe ${label}] ✅ First chunk received, streaming to browser...`);
+        console.log(`[tryPipe ${label}] ✅ First binary chunk received, streaming to browser...`);
       }
       res.write(chunk);
     });
