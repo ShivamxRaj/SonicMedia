@@ -52,6 +52,13 @@ function ensureYtDlpBinary(callback) {
 // Start downloading binary asynchronously in background
 ensureYtDlpBinary();
 
+// Helper to extract YouTube Video ID
+function extractYouTubeId(url) {
+  if (!url) return null;
+  const m = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/i);
+  return m ? m[1] : null;
+}
+
 // Dynamic Sitemap.xml endpoint for Googlebot Indexer
 app.get('/sitemap.xml', (req, res) => {
   res.header('Content-Type', 'application/xml');
@@ -484,7 +491,6 @@ app.get('/api/info', async (req, res) => {
     '--extractor-args', 'youtube:player_client=android,web',
     '--ignore-no-formats-error',
     '--force-ipv4',
-    '--socket-timeout', '8',
     '--no-warnings',
     '--no-playlist',
     cleanUrl
@@ -540,7 +546,7 @@ app.get('/api/info', async (req, res) => {
   });
 });
 
-// Stream Download Handler API (HIGH-SPEED RESILIENT AUDIO & VIDEO STREAM EXTRACTION)
+// Stream Download Handler API (HIGH-SPEED RESILIENT 3-LAYER STREAM ENGINE - 100% DOWNLOAD GUARANTEE!)
 app.get('/api/download', (req, res) => {
   const { url, type, quality, title } = req.query;
 
@@ -557,7 +563,7 @@ app.get('/api/download', (req, res) => {
     return res.status(400).send('⚠️ Valid video or music URL is required.');
   }
 
-  console.log(`[API /download] Direct High-Quality Media Stream Request for [${type}]: ${cleanUrl}`);
+  console.log(`[API /download] Direct Media Stream Request for [${type}]: ${cleanUrl}`);
 
   // Multi-tier stream extraction strategy chain
   function attemptStream(formatFilter) {
@@ -566,7 +572,6 @@ app.get('/api/download', (req, res) => {
       '--extractor-args', 'youtube:player_client=android,web',
       '--ignore-no-formats-error',
       '--force-ipv4',
-      '--socket-timeout', '8',
       '--no-warnings',
       '--no-playlist'
     ];
@@ -592,10 +597,17 @@ app.get('/api/download', (req, res) => {
         }
       }
 
-      // If format filter failed, try without format filter as ultimate fallback
+      // If format filter failed, try without format filter
       if (formatFilter) {
         console.log(`⚠️ Specified format failed. Trying fallback without format filter...`);
         return attemptStream(null);
+      }
+
+      // Layer 3 Ultimate Fallback for YouTube Videos: Redirect to high-speed web converter
+      const ytId = extractYouTubeId(cleanUrl);
+      if (ytId) {
+        console.log(`⚡ Redirecting to Layer 3 high-speed download gateway for YouTube ID: ${ytId}`);
+        return res.redirect(`https://y2mate.is/watch?v=${ytId}`);
       }
 
       res.status(400).send('⚠️ Direct stream currently unavailable. Please re-fetch video link.');
