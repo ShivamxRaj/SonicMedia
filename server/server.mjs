@@ -13,6 +13,7 @@ app.use(express.json());
 
 const YTDLP_BIN = path.join(process.cwd(), 'server', process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
 const YTDLP_TMP = path.join(process.cwd(), 'server', process.platform === 'win32' ? 'yt-dlp.tmp.exe' : 'yt-dlp.tmp');
+const YTDLP_PKG = path.join(process.cwd(), 'server', 'yt_pkg');
 
 // Download standalone yt-dlp binary atomically via temp file
 function ensureYtDlpBinary(callback) {
@@ -71,15 +72,18 @@ function getCommands() {
   const homeBin = path.join(process.env.HOME || '/root', '.local', 'bin', 'yt-dlp');
   const nodeModulesBin = path.join(process.cwd(), 'node_modules', 'yt-dlp-exec', 'bin', process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
 
+  const envWithPkg = {
+    ...process.env,
+    PYTHONPATH: fs.existsSync(YTDLP_PKG) ? `${YTDLP_PKG}:${process.env.PYTHONPATH || ''}` : process.env.PYTHONPATH
+  };
+
   const candidates = [
-    { label: 'python3-m', cmd: 'python3', extraArgs: ['-m', 'yt_dlp'] },
-    { label: 'python-m', cmd: 'python', extraArgs: ['-m', 'yt_dlp'] },
-    { label: 'global-yt-dlp', cmd: 'yt-dlp', extraArgs: [] },
-    { label: 'render-venv-ytdlp', cmd: '/opt/render/project/src/.venv/bin/yt-dlp', extraArgs: [] },
-    { label: 'render-venv-python', cmd: '/opt/render/project/src/.venv/bin/python', extraArgs: ['-m', 'yt_dlp'] },
-    { label: 'server-yt-dlp-bin', cmd: YTDLP_BIN, extraArgs: [] },
-    { label: 'node-modules-yt-dlp-exec', cmd: nodeModulesBin, extraArgs: [] },
-    { label: 'home-local-bin', cmd: homeBin, extraArgs: [] }
+    { label: 'server-yt-dlp-bin', cmd: YTDLP_BIN, extraArgs: [], env: process.env },
+    { label: 'python3-ytpkg', cmd: 'python3', extraArgs: ['-m', 'yt_dlp'], env: envWithPkg },
+    { label: 'python-ytpkg', cmd: 'python', extraArgs: ['-m', 'yt_dlp'], env: envWithPkg },
+    { label: 'global-yt-dlp', cmd: 'yt-dlp', extraArgs: [], env: process.env },
+    { label: 'node-modules-yt-dlp-exec', cmd: nodeModulesBin, extraArgs: [], env: process.env },
+    { label: 'home-local-bin', cmd: homeBin, extraArgs: [], env: process.env }
   ];
 
   return candidates.filter(c => {
@@ -301,14 +305,14 @@ function runYtDlp(args, callback) {
       return callback(1, '', 'All yt-dlp execution strategies failed');
     }
 
-    const { cmd, extraArgs, label } = commands[index];
+    const { cmd, extraArgs, label, env } = commands[index];
     const fullArgs = [...extraArgs, ...args];
 
     let py;
     let handled = false;
 
     try {
-      py = spawn(cmd, fullArgs);
+      py = spawn(cmd, fullArgs, { env: env || process.env });
     } catch (e) {
       console.error(`[runYtDlp ${label}] spawn error:`, e.message);
       return tryCommand(index + 1);
@@ -467,10 +471,10 @@ app.get('/api/debug', (req, res) => {
     testUrl
   ];
 
-  commands.forEach(({ label, cmd, extraArgs }) => {
+  commands.forEach(({ label, cmd, extraArgs, env }) => {
     let py;
     try {
-      py = spawn(cmd, [...extraArgs, ...testPipeArgs]);
+      py = spawn(cmd, [...extraArgs, ...testPipeArgs], { env: env || process.env });
     } catch (e) {
       results.push({ label, cmd, status: 'spawn_error', error: e.message });
       completed++;
@@ -594,7 +598,6 @@ app.get('/api/info', async (req, res) => {
 
   const infoArgs = [
     '--dump-single-json',
-    '--extractor-args', 'youtube:player_client=android',
     '--user-agent', '',
     '--no-check-certificates',
     '--ignore-no-formats-error',
@@ -615,8 +618,8 @@ app.get('/api/info', async (req, res) => {
     try {
       const info = JSON.parse(stdoutData);
 
-      const defaultAudioTarget = `/api/download?url=${encodeURIComponent(cleanUrl)}&type=audio&quality=320k&title=${encodeURIComponent(info.title || 'audio')}`;
-      const defaultVideoTarget = `/api/download?url=${encodeURIComponent(cleanUrl)}&type=video&quality=1080p&title=${encodeURIComponent(info.title || 'video')}`;
+      const titleEnc = encodeURIComponent(info.title || 'media');
+      const urlEnc = encodeURIComponent(cleanUrl);
 
       const response = {
         title: info.title || 'Social Media Video',
@@ -629,16 +632,16 @@ app.get('/api/info', async (req, res) => {
         views: info.view_count ? info.view_count.toLocaleString() : 'N/A',
         formats: {
           audio: [
-            { label: 'MP3 Ultra HD (320 kbps)', bitrate: '320k', size: '~8.5 MB', format_id: 'mp3-320', download_url: defaultAudioTarget },
-            { label: 'MP3 High Quality (256 kbps)', bitrate: '256k', size: '~6.2 MB', format_id: 'mp3-256', download_url: defaultAudioTarget },
-            { label: 'MP3 Standard (128 kbps)', bitrate: '128k', size: '~3.4 MB', format_id: 'mp3-128', download_url: defaultAudioTarget },
-            { label: 'M4A Original Stream', bitrate: 'm4a', size: '~5.1 MB', format_id: 'mp3-128', download_url: defaultAudioTarget }
+            { label: 'MP3 Ultra HD (320 kbps)', bitrate: '320k', size: '~8.5 MB', format_id: 'mp3-320', download_url: `/api/download?url=${urlEnc}&type=audio&quality=320k&title=${titleEnc}` },
+            { label: 'MP3 High Quality (256 kbps)', bitrate: '256k', size: '~6.2 MB', format_id: 'mp3-256', download_url: `/api/download?url=${urlEnc}&type=audio&quality=256k&title=${titleEnc}` },
+            { label: 'MP3 Standard (128 kbps)', bitrate: '128k', size: '~3.4 MB', format_id: 'mp3-128', download_url: `/api/download?url=${urlEnc}&type=audio&quality=128k&title=${titleEnc}` },
+            { label: 'M4A Original Stream', bitrate: 'm4a', size: '~5.1 MB', format_id: 'm4a-orig', download_url: `/api/download?url=${urlEnc}&type=audio&quality=m4a&title=${titleEnc}` }
           ],
           video: [
-            { label: 'MP4 4K Ultra HD (HDR Color Grade + Crisp Edge)', res: '2160p', size: '~120 MB', format_id: 'mp4-4k', download_url: defaultVideoTarget },
-            { label: 'MP4 Full HD (1080p + Audio)', res: '1080p', size: '~45 MB', format_id: 'mp4-1080', download_url: defaultVideoTarget },
-            { label: 'MP4 HD (720p + Audio)', res: '720p', size: '~22 MB', format_id: 'mp4-720', download_url: defaultVideoTarget },
-            { label: 'MP4 SD (480p + Audio)', res: '480p', size: '~12 MB', format_id: 'mp4-480', download_url: defaultVideoTarget }
+            { label: 'MP4 4K Ultra HD (2160p 4K Master)', res: '2160p', size: '~250–600 MB', format_id: 'mp4-4k', download_url: `/api/download?url=${urlEnc}&type=video&quality=2160p&title=${titleEnc}` },
+            { label: 'MP4 Full HD (1080p Crisp Master)', res: '1080p', size: '~80–120 MB', format_id: 'mp4-1080', download_url: `/api/download?url=${urlEnc}&type=video&quality=1080p&title=${titleEnc}` },
+            { label: 'MP4 HD (720p Standard HD)', res: '720p', size: '~30–50 MB', format_id: 'mp4-720', download_url: `/api/download?url=${urlEnc}&type=video&quality=720p&title=${titleEnc}` },
+            { label: 'MP4 SD (480p Mobile Quality)', res: '480p', size: '~15–25 MB', format_id: 'mp4-480', download_url: `/api/download?url=${urlEnc}&type=video&quality=480p&title=${titleEnc}` }
           ]
         }
       };
@@ -671,28 +674,55 @@ app.get('/api/download', (req, res) => {
     return res.status(400).send('⚠️ Valid video or music URL is required.');
   }
 
-  const cleanTitle = (title || 'sonicmedia-download').replace(/[^a-zA-Z0-9_-]/g, '_');
+  const safeAsciiTitle = (title || 'sonicmedia-download').replace(/[^a-zA-Z0-9_\-\s.]/g, '_').replace(/\s+/g, ' ').trim();
   const ext = type === 'audio' ? 'mp3' : 'mp4';
-  const filename = `${cleanTitle}.${ext}`;
+  const filename = `${safeAsciiTitle}.${ext}`;
 
-  console.log(`[API /download] Direct Media Stream Request for [${type}]: ${cleanUrl}`);
+  res.setHeader('Content-Type', type === 'audio' ? 'audio/mpeg' : 'video/mp4');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
+  res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Disposition, X-Filename');
+  res.setHeader('X-Filename', encodeURIComponent(filename));
+
+  console.log(`[API /download] Direct Media Stream Request for [${type} - ${quality || 'best'}]: ${cleanUrl} -> ${filename}`);
 
   const commands = getCommands();
+  const FFMPEG_BIN = path.join(process.cwd(), 'node_modules', 'ffmpeg-static', process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg');
+  const hasFfmpeg = fs.existsSync(FFMPEG_BIN);
 
-  // Always pipe pure binary to stdout using empty user-agent to bypass YouTube datacenter bot verification
+  let formatString = 'bestvideo+bestaudio/best';
+  if (type === 'audio') {
+    formatString = 'bestaudio/ba/best';
+  } else if (quality) {
+    const qLower = quality.toLowerCase();
+    if (qLower.includes('2160') || qLower.includes('4k') || qLower.includes('8k')) {
+      formatString = 'bestvideo[height<=2160]+bestaudio/bestvideo+bestaudio/best';
+    } else if (qLower.includes('1080')) {
+      formatString = 'bestvideo[height<=1080]+bestaudio/bestvideo+bestaudio/best';
+    } else if (qLower.includes('720')) {
+      formatString = 'bestvideo[height<=720]+bestaudio/bestvideo+bestaudio/best';
+    } else if (qLower.includes('480')) {
+      formatString = 'bestvideo[height<=480]+bestaudio/bestvideo+bestaudio/best';
+    }
+  }
+
   const pipeArgs = [
     '-q',
     '--no-progress',
     '-o', '-',
-    '-f', '18/b/best',
-    '--extractor-args', 'youtube:player_client=android',
+    '-f', formatString,
+    '--merge-output-format', 'mp4',
     '--user-agent', '',
     '--no-check-certificates',
     '--ignore-no-formats-error',
     '--no-part',
-    '--no-playlist',
-    cleanUrl
+    '--no-playlist'
   ];
+
+  if (hasFfmpeg) {
+    pipeArgs.push('--ffmpeg-location', FFMPEG_BIN);
+  }
+
+  pipeArgs.push(cleanUrl);
 
   function tryPipe(index) {
     if (index >= commands.length) {
@@ -703,36 +733,75 @@ app.get('/api/download', (req, res) => {
       return;
     }
 
-    const { cmd, extraArgs, label } = commands[index];
+    const { cmd, extraArgs, label, env } = commands[index];
     let child;
+    let ffmpegProc = null;
     let hasWritten = false;
     let stderrLog = '';
 
     try {
-      child = spawn(cmd, [...extraArgs, ...pipeArgs]);
+      child = spawn(cmd, [...extraArgs, ...pipeArgs], { env: env || process.env });
     } catch (e) {
       console.error(`[tryPipe ${label}] spawn error:`, e.message);
       return tryPipe(index + 1);
     }
 
     const killTimer = setTimeout(() => {
-      console.error(`[tryPipe ${label}] TIMEOUT 45s, killing process`);
+      console.error(`[tryPipe ${label}] TIMEOUT 15min, killing process`);
       try { child.kill('SIGKILL'); } catch (e) {}
-    }, 45000);
+      if (ffmpegProc) try { ffmpegProc.kill('SIGKILL'); } catch (e) {}
+    }, 900000);
 
     child.stderr.on('data', (d) => {
       stderrLog += d.toString();
     });
 
-    child.stdout.on('data', (chunk) => {
-      if (!hasWritten) {
-        hasWritten = true;
-        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-        res.setHeader('Content-Type', type === 'audio' ? 'audio/mpeg' : 'video/mp4');
-        console.log(`[tryPipe ${label}] ✅ First binary chunk received, streaming to browser...`);
+    if (type === 'audio' && hasFfmpeg) {
+      // Pipe through FFmpeg with -vn (No Video) to produce 100% PURE MP3 AUDIO stream
+      const audioBitrate = (quality && quality.includes('128')) ? '128k' : (quality && quality.includes('256')) ? '256k' : '320k';
+      try {
+        ffmpegProc = spawn(FFMPEG_BIN, [
+          '-i', 'pipe:0',
+          '-vn',
+          '-acodec', 'libmp3lame',
+          '-b:a', audioBitrate,
+          '-f', 'mp3',
+          'pipe:1'
+        ]);
+
+        child.stdout.pipe(ffmpegProc.stdin);
+
+        ffmpegProc.stdout.on('data', (chunk) => {
+          if (!hasWritten) {
+            hasWritten = true;
+            console.log(`[tryPipe ${label} -> FFmpeg] ✅ Pure MP3 audio stream active (${audioBitrate}), piping to browser as [${filename}]...`);
+          }
+          res.write(chunk);
+        });
+
+        ffmpegProc.on('error', (err) => {
+          console.error('[FFmpeg audio error]', err.message);
+        });
+
+        ffmpegProc.on('close', (code) => {
+          clearTimeout(killTimer);
+          console.log(`[FFmpeg audio] Stream complete (code ${code})`);
+          res.end();
+        });
+      } catch (e) {
+        console.error('FFmpeg audio spawn failed, falling back to direct pipe:', e);
       }
-      res.write(chunk);
-    });
+    }
+
+    if (!ffmpegProc) {
+      child.stdout.on('data', (chunk) => {
+        if (!hasWritten) {
+          hasWritten = true;
+          console.log(`[tryPipe ${label}] ✅ First binary chunk received, streaming to browser as [${filename}]...`);
+        }
+        res.write(chunk);
+      });
+    }
 
     child.on('error', (err) => {
       clearTimeout(killTimer);
@@ -744,17 +813,21 @@ app.get('/api/download', (req, res) => {
       clearTimeout(killTimer);
       if (!hasWritten && exitCode !== 0) {
         console.error(`[tryPipe ${label}] exited with code ${exitCode}. stderr: ${stderrLog.slice(-300)}`);
+        if (ffmpegProc) try { ffmpegProc.kill(); } catch (e) {}
         return tryPipe(index + 1);
       }
-      if (hasWritten) {
-        console.log(`[tryPipe ${label}] ✅ Stream completed`);
+      if (!ffmpegProc) {
+        if (hasWritten) {
+          console.log(`[tryPipe ${label}] ✅ Stream completed`);
+        }
+        res.end();
       }
-      res.end();
     });
 
     req.on('close', () => {
       clearTimeout(killTimer);
       try { child.kill(); } catch (e) {}
+      if (ffmpegProc) try { ffmpegProc.kill(); } catch (e) {}
     });
   }
 

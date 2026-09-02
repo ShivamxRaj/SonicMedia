@@ -50,6 +50,20 @@ export default function App() {
         setIsPro(true);
       }
     } catch (e) {}
+
+    // Dynamic SEO Route & Target Keyword Title Engine
+    const path = window.location.pathname.toLowerCase();
+    if (path.includes('youtube-to-mp3')) {
+      document.title = "YouTube to MP3 320kbps Converter (Free & Studio Quality) — SonicMedia";
+    } else if (path.includes('4k-youtube')) {
+      document.title = "4K YouTube Video Downloader (2160p Ultra HD Free) — SonicMedia";
+    } else if (path.includes('instagram-reels')) {
+      document.title = "Instagram Reels Downloader Online (Fast & MP4) — SonicMedia";
+    } else if (path.includes('tiktok-downloader')) {
+      document.title = "TikTok Downloader Without Watermark (Free HD) — SonicMedia";
+    } else if (path.includes('slowed-and-reverb')) {
+      document.title = "Slowed and Reverb Songs Generator Online — SonicMedia Studio";
+    }
   }, []);
 
   const saveHistory = (newHistory) => {
@@ -61,42 +75,27 @@ export default function App() {
     }
   };
 
-  const handleActivatePro = (key) => {
+  const handleActivatePro = () => {
     setIsPro(true);
     try {
       localStorage.setItem('sonicmedia_pro', 'true');
     } catch (e) {}
   };
 
-  // Universal Bulletproof URL Extractor
-  const extractValidMediaUrl = (input) => {
-    if (!input || typeof input !== 'string') return null;
+  const handleAnalyze = async (inputUrl) => {
+    const rawUrl = inputUrl || url;
+    if (!rawUrl.trim()) return;
 
-    let raw = input.trim();
-    const secondHttp = raw.indexOf('http', 8);
+    let cleanUrl = rawUrl.trim();
+    const secondHttp = cleanUrl.indexOf('http', 8);
     if (secondHttp !== -1) {
-      raw = raw.substring(0, secondHttp);
+      cleanUrl = cleanUrl.substring(0, secondHttp);
     }
 
-    const match = raw.match(/(https?:\/\/[^\s>]+)/i);
-    if (!match) return null;
-
-    let cleanUrl = match[0];
-    if (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) {
-      return cleanUrl;
-    }
-    return null;
-  };
-
-  // Analyze URL via Backend API
-  const handleAnalyze = async (targetUrl) => {
-    const rawInput = (targetUrl || url).trim();
-    if (!rawInput) return;
-
-    const cleanUrl = extractValidMediaUrl(rawInput);
+    const match = cleanUrl.match(/(https?:\/\/[^\s>]+)/i);
+    cleanUrl = match ? match[0] : null;
 
     if (!cleanUrl) {
-      setMedia(null);
       setError('Please paste a valid video or track URL (e.g. YouTube, Instagram, TikTok, Twitter).');
       return;
     }
@@ -124,12 +123,19 @@ export default function App() {
     }
   };
 
-  // Trigger Instant Native Browser File Download & Log History
+  // Trigger Native Browser File Download Engine (Chrome / Firefox / Safari native download bar)
   const handleDownload = (item) => {
     const downloadTarget = item.download_url || `/api/download?url=${encodeURIComponent(item.url)}&type=${item.type}&quality=${item.quality}&title=${encodeURIComponent(item.title)}`;
     
-    // Direct window location redirect triggers instant browser file download window
-    window.location.href = downloadTarget;
+    // Direct native browser link trigger for native browser download manager
+    const link = document.createElement('a');
+    link.href = downloadTarget;
+    const safeTitle = (item.title || 'sonicmedia-download').replace(/[^a-zA-Z0-9_\-\s.]/g, '_').replace(/\s+/g, ' ').trim();
+    const ext = item.type === 'audio' ? 'mp3' : 'mp4';
+    link.setAttribute('download', `${safeTitle}.${ext}`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 
     const historyItem = {
       title: item.title,
@@ -141,7 +147,7 @@ export default function App() {
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
-    const updated = [historyItem, ...history.slice(0, 9)];
+    const updated = [historyItem, ...history.filter(h => h.url !== item.url || h.quality !== item.quality).slice(0, 9)];
     saveHistory(updated);
   };
 
