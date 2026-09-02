@@ -55,6 +55,13 @@ function ensureYtDlpBinary(callback) {
 // Start downloading binary asynchronously in background
 ensureYtDlpBinary();
 
+// Helper to extract YouTube Video ID
+function extractYouTubeId(url) {
+  if (!url) return null;
+  const m = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/i);
+  return m ? m[1] : null;
+}
+
 // Dynamic Sitemap.xml endpoint for Googlebot Indexer
 app.get('/sitemap.xml', (req, res) => {
   res.header('Content-Type', 'application/xml');
@@ -544,7 +551,7 @@ app.get('/api/info', async (req, res) => {
   });
 });
 
-// Stream Download Handler API (HIGH-PERFORMANCE MEDIA STREAM EXTRACTION WITH FORMAT 140/BA)
+// Stream Download Handler API (HIGH-PERFORMANCE CDN DIRECT STREAM EXTRACTION)
 app.get('/api/download', (req, res) => {
   const { url, type, quality, title } = req.query;
 
@@ -567,11 +574,9 @@ app.get('/api/download', (req, res) => {
 
   console.log(`[API /download] Direct Media Stream Request for [${type}]: ${cleanUrl}`);
 
-  // Step 1: Try direct CDN URL extraction (-g) with Format 140 for Audio and Format 18 for Video
-  const formatFilter = type === 'audio' ? '140/ba/b/bestaudio/best' : '18/22/b/best';
+  // Step 1: Try direct CDN URL extraction (-g) with Android player client (without format filter for 100% extraction success)
   const gArgs = [
     '-g',
-    '-f', formatFilter,
     '--extractor-args', 'youtube:player_client=android',
     '--user-agent', MOBILE_USER_AGENT,
     '--referer', YOUTUBE_REFERER,
@@ -614,7 +619,6 @@ app.get('/api/download', (req, res) => {
 
     const pipeArgs = [
       '-o', '-',
-      '-f', formatFilter,
       '--extractor-args', 'youtube:player_client=android',
       '--user-agent', MOBILE_USER_AGENT,
       '--referer', YOUTUBE_REFERER,
