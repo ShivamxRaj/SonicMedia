@@ -850,7 +850,6 @@ app.get('/api/download', (req, res) => {
 
     req.on('close', cleanup);
     res.on('close', cleanup);
-    });
   }
 
   tryPipe(0);

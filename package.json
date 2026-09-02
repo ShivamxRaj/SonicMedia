@@ -8,8 +8,8 @@
     "postinstall": "python3 -m pip install --target=server/yt_pkg yt-dlp || pip install --target=server/yt_pkg yt-dlp || true",
     "build": "python3 -m pip install --target=server/yt_pkg yt-dlp || pip install --target=server/yt_pkg yt-dlp || true; vite build",
     "preview": "vite preview",
-    "server": "NODE_OPTIONS='--max-old-space-size=400' node server/server.mjs",
-    "start": "NODE_OPTIONS='--max-old-space-size=400' node server/server.mjs"
+    "server": "node --max-old-space-size=400 server/server.mjs",
+    "start": "node --max-old-space-size=400 server/server.mjs"
   },
   "dependencies": {
     "@distube/ytdl-core": "^4.16.10",
