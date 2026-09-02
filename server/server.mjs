@@ -407,6 +407,54 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Debug endpoint to test yt-dlp availability on Render
+app.get('/api/debug', (req, res) => {
+  const testUrl = req.query.url || 'https://youtu.be/bKuL8VRXYKM';
+  const results = [];
+  
+  const commands = [
+    { label: 'venv-ytdlp', cmd: '/opt/render/project/src/.venv/bin/yt-dlp', extraArgs: [] },
+    { label: 'venv-python', cmd: '/opt/render/project/src/.venv/bin/python', extraArgs: ['-m', 'yt_dlp'] },
+    { label: 'global-ytdlp', cmd: 'yt-dlp', extraArgs: [] },
+    { label: 'python3-m', cmd: 'python3', extraArgs: ['-m', 'yt_dlp'] },
+    { label: 'python-m', cmd: 'python', extraArgs: ['-m', 'yt_dlp'] }
+  ];
+  
+  if (fs.existsSync(YTDLP_BIN)) {
+    commands.unshift({ label: 'standalone-bin', cmd: YTDLP_BIN, extraArgs: [] });
+  }
+  
+  let completed = 0;
+  
+  commands.forEach(({ label, cmd, extraArgs }) => {
+    const args = [...extraArgs, '--version'];
+    let py;
+    try {
+      py = spawn(cmd, args);
+    } catch (e) {
+      results.push({ label, cmd, status: 'spawn_error', error: e.message });
+      completed++;
+      if (completed === commands.length) res.json({ testUrl, commands: results });
+      return;
+    }
+    
+    let stdout = '';
+    let stderr = '';
+    py.stdout.on('data', d => stdout += d.toString());
+    py.stderr.on('data', d => stderr += d.toString());
+    py.on('error', (e) => {
+      results.push({ label, cmd, status: 'error', error: e.message });
+      completed++;
+      if (completed === commands.length) res.json({ testUrl, commands: results });
+    });
+    py.on('close', (code) => {
+      results.push({ label, cmd, status: code === 0 ? 'ok' : 'fail', exitCode: code, version: stdout.trim(), stderr: stderr.slice(0, 200) });
+      completed++;
+      if (completed === commands.length) res.json({ testUrl, commands: results });
+    });
+  });
+});
+
 // Submit Payment UTR for Real-time Telegram Approval
 app.post('/api/submit-payment', (req, res) => {
   const { utr, amount } = req.body;
