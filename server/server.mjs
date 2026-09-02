@@ -757,7 +757,7 @@ app.get('/api/download', (req, res) => {
     });
 
     if (type === 'audio' && hasFfmpeg) {
-      // Pipe through FFmpeg with -vn (No Video) to produce 100% PURE MP3 AUDIO stream
+      // Pipe through FFmpeg with ID3v2.3 & 44.1kHz stereo to produce 100% Windows Media Player compatible MP3
       const audioBitrate = (quality && quality.includes('128')) ? '128k' : (quality && quality.includes('256')) ? '256k' : '320k';
       try {
         ffmpegProc = spawn(FFMPEG_BIN, [
@@ -765,28 +765,18 @@ app.get('/api/download', (req, res) => {
           '-vn',
           '-acodec', 'libmp3lame',
           '-b:a', audioBitrate,
+          '-ar', '44100',
+          '-ac', '2',
+          '-id3v2_version', '3',
+          '-write_id3v1', '1',
           '-f', 'mp3',
           'pipe:1'
         ]);
 
         child.stdout.pipe(ffmpegProc.stdin);
-
-        ffmpegProc.stdout.on('data', (chunk) => {
-          if (!hasWritten) {
-            hasWritten = true;
-            console.log(`[tryPipe ${label} -> FFmpeg] ✅ Pure MP3 audio stream active (${audioBitrate}), piping to browser as [${filename}]...`);
-          }
-          const canWrite = res.write(chunk);
-          if (!canWrite && ffmpegProc.stdout.pause) {
-            ffmpegProc.stdout.pause();
-          }
-        });
-
-        res.on('drain', () => {
-          if (ffmpegProc && ffmpegProc.stdout && ffmpegProc.stdout.resume) {
-            ffmpegProc.stdout.resume();
-          }
-        });
+        ffmpegProc.stdout.pipe(res);
+        hasWritten = true;
+        console.log(`[tryPipe ${label} -> FFmpeg] ✅ Windows Media Player compatible MP3 stream active (${audioBitrate}), piping to browser as [${filename}]...`);
 
         ffmpegProc.on('error', (err) => {
           console.error('[FFmpeg audio error]', err.message);
@@ -795,7 +785,6 @@ app.get('/api/download', (req, res) => {
         ffmpegProc.on('close', (code) => {
           clearTimeout(killTimer);
           console.log(`[FFmpeg audio] Stream complete (code ${code})`);
-          res.end();
         });
       } catch (e) {
         console.error('FFmpeg audio spawn failed, falling back to direct pipe:', e);
