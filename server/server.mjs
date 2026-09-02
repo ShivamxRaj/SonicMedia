@@ -456,9 +456,12 @@ app.get('/api/debug', (req, res) => {
   }
 
   const testPipeArgs = [
-    '-g',
+    '-q',
+    '--no-progress',
+    '-o', '-',
     '-f', '18/b/best',
-    '--extractor-args', 'youtube:player_client=mweb,android_creator,android',
+    '--extractor-args', 'youtube:player_client=android',
+    '--user-agent', '',
     '--no-check-certificates',
     '--no-playlist',
     testUrl
@@ -475,10 +478,17 @@ app.get('/api/debug', (req, res) => {
       return;
     }
 
-    let stdout = '';
+    let bytesReceived = 0;
+    let first4BytesHex = '';
     let stderr = '';
 
-    py.stdout.on('data', d => stdout += d.toString());
+    py.stdout.on('data', d => {
+      if (bytesReceived === 0 && d.length >= 4) {
+        first4BytesHex = d.slice(0, 4).toString('hex');
+      }
+      bytesReceived += d.length;
+    });
+
     py.stderr.on('data', d => stderr += d.toString());
 
     py.on('error', (e) => {
@@ -491,9 +501,10 @@ app.get('/api/debug', (req, res) => {
       results.push({
         label,
         cmd,
-        status: code === 0 ? 'ok' : 'fail',
+        status: bytesReceived > 0 ? 'ok' : 'fail',
         exitCode: code,
-        cdnUrl: stdout.trim().split('\n')[0] || '',
+        bytesReceived,
+        first4BytesHex,
         stderr: stderr.slice(-300)
       });
       completed++;
@@ -560,7 +571,7 @@ app.get('/api/payment-status', (req, res) => {
   res.json({ utr: cleanUtr, status: 'NOT_FOUND' });
 });
 
-// Extract Media Metadata API with android_creator Player Client Bypass & Noembed Fallback
+// Extract Media Metadata API with android Player Client Bypass & Noembed Fallback
 app.get('/api/info', async (req, res) => {
   const { url } = req.query;
 
@@ -583,7 +594,8 @@ app.get('/api/info', async (req, res) => {
 
   const infoArgs = [
     '--dump-single-json',
-    '--extractor-args', 'youtube:player_client=mweb,android_creator,android',
+    '--extractor-args', 'youtube:player_client=android',
+    '--user-agent', '',
     '--no-check-certificates',
     '--ignore-no-formats-error',
     '--no-warnings',
@@ -641,8 +653,8 @@ app.get('/api/info', async (req, res) => {
   });
 });
 
-// Stream Download Handler API (2-STEP DIRECT CDN BINARY PROXY ENGINE)
-// ZERO-REDIRECT: Step 1 extracts GoogleVideo CDN URL, Step 2 Express proxies binary stream directly to browser.
+// Stream Download Handler API (ZERO-REDIRECT BINARY PIPE ENGINE WITH EMPTY USER-AGENT BYPASS)
+// ALWAYS pipe binary stream through our Express server using pre-merged format 18/b/best.
 app.get('/api/download', (req, res) => {
   const { url, type, quality, title } = req.query;
 
@@ -663,141 +675,90 @@ app.get('/api/download', (req, res) => {
   const ext = type === 'audio' ? 'mp3' : 'mp4';
   const filename = `${cleanTitle}.${ext}`;
 
-  console.log(`[API /download] Direct CDN Stream Request for [${type}]: ${cleanUrl}`);
+  console.log(`[API /download] Direct Media Stream Request for [${type}]: ${cleanUrl}`);
 
-  // Step 1: Extract direct CDN URL (-g) using mweb,android_creator,android player clients
-  const gArgs = [
-    '-g',
+  const commands = getCommands();
+
+  // Always pipe pure binary to stdout using empty user-agent to bypass YouTube datacenter bot verification
+  const pipeArgs = [
+    '-q',
+    '--no-progress',
+    '-o', '-',
     '-f', '18/b/best',
-    '--extractor-args', 'youtube:player_client=mweb,android_creator,android',
+    '--extractor-args', 'youtube:player_client=android',
+    '--user-agent', '',
     '--no-check-certificates',
     '--ignore-no-formats-error',
-    '--no-warnings',
+    '--no-part',
     '--no-playlist',
     cleanUrl
   ];
 
-  runYtDlp(gArgs, (code, stdoutData, stderrData) => {
-    if (code === 0 && stdoutData) {
-      const cdnUrls = stdoutData.trim().split('\n').filter(Boolean);
-      const directCdnUrl = cdnUrls[0];
+  function tryPipe(index) {
+    if (index >= commands.length) {
+      console.error(`❌ All stream pipe strategies failed for: ${cleanUrl}`);
+      if (!res.headersSent) {
+        res.status(500).send('⚠️ Download failed. The stream is temporarily unavailable. Please try again in a few seconds.');
+      }
+      return;
+    }
 
-      if (directCdnUrl && directCdnUrl.startsWith('http')) {
-        console.log(`⚡ Direct CDN Stream Link Extracted! Proxying binary directly from GoogleVideo...`);
+    const { cmd, extraArgs, label } = commands[index];
+    let child;
+    let hasWritten = false;
+    let stderrLog = '';
 
+    try {
+      child = spawn(cmd, [...extraArgs, ...pipeArgs]);
+    } catch (e) {
+      console.error(`[tryPipe ${label}] spawn error:`, e.message);
+      return tryPipe(index + 1);
+    }
+
+    const killTimer = setTimeout(() => {
+      console.error(`[tryPipe ${label}] TIMEOUT 45s, killing process`);
+      try { child.kill('SIGKILL'); } catch (e) {}
+    }, 45000);
+
+    child.stderr.on('data', (d) => {
+      stderrLog += d.toString();
+    });
+
+    child.stdout.on('data', (chunk) => {
+      if (!hasWritten) {
+        hasWritten = true;
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
         res.setHeader('Content-Type', type === 'audio' ? 'audio/mpeg' : 'video/mp4');
-
-        const cdnReq = https.get(directCdnUrl, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-            'Referer': 'https://www.youtube.com/'
-          }
-        }, (cdnRes) => {
-          cdnRes.pipe(res);
-        });
-
-        cdnReq.on('error', (e) => {
-          console.error('CDN Proxy Stream Error:', e.message);
-          fallbackPipeStream();
-        });
-
-        req.on('close', () => {
-          try { cdnReq.destroy(); } catch (e) {}
-        });
-
-        return;
+        console.log(`[tryPipe ${label}] ✅ First binary chunk received, streaming to browser...`);
       }
-    }
+      res.write(chunk);
+    });
 
-    console.error(`yt-dlp -g stderr:`, stderrData);
-    fallbackPipeStream();
-  });
+    child.on('error', (err) => {
+      clearTimeout(killTimer);
+      console.error(`[tryPipe ${label}] process error:`, err.message);
+      if (!hasWritten) tryPipe(index + 1);
+    });
 
-  // Fallback Step: stdout binary pipe if -g fails
-  function fallbackPipeStream() {
-    console.log(`⚡ Direct CDN URL extraction failed. Streaming binary directly via stdout pipe...`);
-    const commands = getCommands();
-
-    const pipeArgs = [
-      '-q',
-      '--no-progress',
-      '-o', '-',
-      '-f', '18/b/best',
-      '--extractor-args', 'youtube:player_client=mweb,android_creator,android',
-      '--no-check-certificates',
-      '--ignore-no-formats-error',
-      '--no-part',
-      '--no-playlist',
-      cleanUrl
-    ];
-
-    function tryPipe(index) {
-      if (index >= commands.length) {
-        console.error(`❌ All stream pipe strategies failed for: ${cleanUrl}`);
-        if (!res.headersSent) {
-          res.status(500).send('⚠️ Download failed. The stream is temporarily unavailable. Please try again in a few seconds.');
-        }
-        return;
-      }
-
-      const { cmd, extraArgs, label } = commands[index];
-      let child;
-      let hasWritten = false;
-      let stderrLog = '';
-
-      try {
-        child = spawn(cmd, [...extraArgs, ...pipeArgs]);
-      } catch (e) {
-        console.error(`[tryPipe ${label}] spawn error:`, e.message);
+    child.on('close', (exitCode) => {
+      clearTimeout(killTimer);
+      if (!hasWritten && exitCode !== 0) {
+        console.error(`[tryPipe ${label}] exited with code ${exitCode}. stderr: ${stderrLog.slice(-300)}`);
         return tryPipe(index + 1);
       }
+      if (hasWritten) {
+        console.log(`[tryPipe ${label}] ✅ Stream completed`);
+      }
+      res.end();
+    });
 
-      const killTimer = setTimeout(() => {
-        console.error(`[tryPipe ${label}] TIMEOUT 45s, killing process`);
-        try { child.kill('SIGKILL'); } catch (e) {}
-      }, 45000);
-
-      child.stderr.on('data', (d) => {
-        stderrLog += d.toString();
-      });
-
-      child.stdout.on('data', (chunk) => {
-        if (!hasWritten) {
-          hasWritten = true;
-          res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-          res.setHeader('Content-Type', type === 'audio' ? 'audio/mpeg' : 'video/mp4');
-          console.log(`[tryPipe ${label}] ✅ First binary chunk received, streaming to browser...`);
-        }
-        res.write(chunk);
-      });
-
-      child.on('error', (err) => {
-        clearTimeout(killTimer);
-        console.error(`[tryPipe ${label}] process error:`, err.message);
-        if (!hasWritten) tryPipe(index + 1);
-      });
-
-      child.on('close', (exitCode) => {
-        clearTimeout(killTimer);
-        if (!hasWritten && exitCode !== 0) {
-          console.error(`[tryPipe ${label}] exited with code ${exitCode}. stderr: ${stderrLog.slice(-300)}`);
-          return tryPipe(index + 1);
-        }
-        if (hasWritten) {
-          console.log(`[tryPipe ${label}] ✅ Stream completed`);
-        }
-        res.end();
-      });
-
-      req.on('close', () => {
-        clearTimeout(killTimer);
-        try { child.kill(); } catch (e) {}
-      });
-    }
-
-    tryPipe(0);
+    req.on('close', () => {
+      clearTimeout(killTimer);
+      try { child.kill(); } catch (e) {}
+    });
   }
+
+  tryPipe(0);
 });
 
 // Fallback to index.html for SPA routing
