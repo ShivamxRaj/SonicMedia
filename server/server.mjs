@@ -759,14 +759,6 @@ app.get('/api/download', (req, res) => {
           const stat = fs.statSync(tempFilePath);
           console.log(`[tryAudioConvert ${label}] ✅ MP3 converted successfully (${(stat.size / 1024 / 1024).toFixed(2)} MB), streaming to browser...`);
 
-          if (!res.headersSent) {
-            res.setHeader('Content-Type', 'audio/mpeg');
-            res.setHeader('Content-Length', stat.size);
-            res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
-            res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Disposition, X-Filename');
-            res.setHeader('X-Filename', encodeURIComponent(filename));
-          }
-
           const readStream = fs.createReadStream(tempFilePath);
           readStream.pipe(res);
 
