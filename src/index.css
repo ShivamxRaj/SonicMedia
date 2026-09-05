@@ -343,6 +343,23 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* ==========================================================================
+   PERFORMANCE & RESPONSIVE ENGINE (HARDWARE ACCELERATION & TOUCH SCROLL)
+   ========================================================================== */
+
+/* Hardware Acceleration for Zero-Lag Animations & Scrolling */
+.glass-card, .btn-primary, .btn-secondary, .header-nav {
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+/* Touch-optimized smooth scrolling for modals */
+div[style*="position: fixed"],
+div[style*="position:fixed"] {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ==========================================================================
    MOBILE & TABLET RESPONSIVE STYLES
    ========================================================================== */
 
@@ -418,17 +435,36 @@ h1, h2, h3, h4, h5, h6 {
   }
 
   h1 {
-    font-size: 1.8rem !important;
+    font-size: 1.7rem !important;
   }
 
   .glass-card {
-    padding: 18px !important;
+    padding: 16px !important;
     border-radius: var(--radius-md) !important;
+    max-height: 90vh !important;
+    overflow-y: auto !important;
   }
 
   .btn-primary, .btn-secondary {
-    padding: 10px 16px !important;
-    font-size: 0.875rem !important;
+    padding: 10px 14px !important;
+    font-size: 0.85rem !important;
   }
 }
+
+@media (max-width: 380px) {
+  .header-nav {
+    padding: 8px 10px !important;
+  }
+
+  .brand-title {
+    font-size: 0.95rem !important;
+  }
+
+  .header-actions button,
+  .header-actions .nav-btn {
+    padding: 5px 7px !important;
+    font-size: 0.7rem !important;
+  }
+}
+
 
