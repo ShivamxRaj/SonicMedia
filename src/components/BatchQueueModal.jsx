@@ -164,17 +164,17 @@ export default function BatchQueueModal({ isOpen, onClose, onProcessBatch, isPro
           }}>
             <Layers size={22} color="#fff" />
           </div>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <h3 style={{ fontSize: '1.3rem', fontWeight: 800 }}>Batch Queue</h3>
+          <div style={{ paddingRight: '36px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0 }}>Batch Queue</h3>
               {!isPro && (
-                <span style={{ fontSize: '0.75rem', color: '#ec4899', background: 'rgba(236, 72, 153, 0.15)', padding: '2px 8px', borderRadius: '10px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                  <Lock size={10} /> PRO (Max 2 for Free)
+                <span style={{ fontSize: '0.72rem', color: '#ec4899', background: 'rgba(236, 72, 153, 0.15)', padding: '2px 8px', borderRadius: '10px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  <Lock size={10} /> PRO
                 </span>
               )}
             </div>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-              Paste playlist URLs or multiple links (one per line) to extract & download all at once.
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '3px' }}>
+              Paste playlist URLs or multiple links (one per line) to download all at once.
             </p>
           </div>
         </div>
