@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
 import { X, Layers, Play, CheckCircle2, Download, Sparkles, Lock, ArrowRight } from 'lucide-react';
+import axios from 'axios';
 
 export default function BatchQueueModal({ isOpen, onClose, onProcessBatch, isPro, onOpenProModal }) {
   const [linksText, setLinksText] = useState('');
   const [formatType, setFormatType] = useState('audio'); // 'audio' | 'video'
   const [isProcessing, setIsProcessing] = useState(false);
+  const [statusMessage, setStatusMessage] = useState('');
   const [batchResults, setBatchResults] = useState([]);
 
   if (!isOpen) return null;
 
-  const handleStartBatch = () => {
+  const handleStartBatch = async () => {
     const lines = linksText
       .split('\n')
       .map((l) => l.trim())
@@ -26,33 +28,83 @@ export default function BatchQueueModal({ isOpen, onClose, onProcessBatch, isPro
     }
 
     setIsProcessing(true);
+    setStatusMessage('Scanning links & playlist items...');
     setBatchResults([]);
 
-    let count = 0;
-    const items = [];
+    const allItems = [];
+    let currentId = 1;
 
-    const interval = setInterval(() => {
-      if (count >= lines.length) {
-        clearInterval(interval);
-        setIsProcessing(false);
-        return;
+    for (let i = 0; i < lines.length; i++) {
+      const lineUrl = lines[i];
+      setStatusMessage(`Analyzing item ${i + 1} of ${lines.length}...`);
+
+      try {
+        // If it's a playlist URL or list link, extract playlist tracks
+        if (lineUrl.includes('playlist?') || lineUrl.includes('/sets/') || lineUrl.includes('list=')) {
+          const res = await axios.get(`/api/playlist?url=${encodeURIComponent(lineUrl)}`);
+          if (res.data && res.data.tracks && res.data.tracks.length > 0) {
+            res.data.tracks.forEach((track) => {
+              allItems.push({
+                id: currentId++,
+                url: track.url,
+                title: track.title,
+                uploader: track.uploader,
+                duration: track.duration,
+                type: formatType,
+                quality: formatType === 'audio' ? '320k' : '1080p',
+                formatLabel: formatType === 'audio' ? 'MP3 320kbps' : 'MP4 1080p',
+                status: 'completed',
+                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              });
+            });
+          } else {
+            throw new Error('No tracks');
+          }
+        } else {
+          // Regular single video URL
+          const res = await axios.get(`/api/info?url=${encodeURIComponent(lineUrl)}`);
+          const title = res.data?.title || `Track #${currentId}`;
+          allItems.push({
+            id: currentId++,
+            url: lineUrl,
+            title: title,
+            uploader: res.data?.uploader || 'Artist',
+            duration: res.data?.duration || '',
+            type: formatType,
+            quality: formatType === 'audio' ? '320k' : '1080p',
+            formatLabel: formatType === 'audio' ? 'MP3 320kbps' : 'MP4 1080p',
+            status: 'completed',
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          });
+        }
+      } catch (err) {
+        // Fallback for offline or unreachable metadata
+        allItems.push({
+          id: currentId++,
+          url: lineUrl,
+          title: `Media Track ${currentId}`,
+          uploader: 'Social Media',
+          duration: '',
+          type: formatType,
+          quality: formatType === 'audio' ? '320k' : '1080p',
+          formatLabel: formatType === 'audio' ? 'MP3 320kbps' : 'MP4 1080p',
+          status: 'completed',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        });
       }
+      setBatchResults([...allItems]);
+    }
 
-      const url = lines[count];
-      const resultItem = {
-        id: count + 1,
-        url,
-        title: `Track #${count + 1} - Social Media Media`,
-        type: formatType,
-        quality: formatType === 'audio' ? 'MP3 320kbps' : 'MP4 1080p',
-        status: 'completed',
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      };
+    setIsProcessing(false);
+    setStatusMessage('');
+  };
 
-      items.push(resultItem);
-      setBatchResults([...items]);
-      count++;
-    }, 800);
+  const handleDownloadAll = () => {
+    batchResults.forEach((item, index) => {
+      setTimeout(() => {
+        onProcessBatch(item);
+      }, index * 1200);
+    });
   };
 
   return (
@@ -111,7 +163,7 @@ export default function BatchQueueModal({ isOpen, onClose, onProcessBatch, isPro
           </div>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <h3 style={{ fontSize: '1.3rem', fontWeight: 800 }}>Batch Multi-Link Queue</h3>
+              <h3 style={{ fontSize: '1.3rem', fontWeight: 800 }}>Batch Multi-Link & Playlist Queue</h3>
               {!isPro && (
                 <span style={{ fontSize: '0.75rem', color: '#ec4899', background: 'rgba(236, 72, 153, 0.15)', padding: '2px 8px', borderRadius: '10px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                   <Lock size={10} /> PRO (Max 2 for Free)
@@ -119,7 +171,7 @@ export default function BatchQueueModal({ isOpen, onClose, onProcessBatch, isPro
               )}
             </div>
             <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-              Paste multiple links (one per line) to extract & download all at once.
+              Paste playlist URLs or multiple links (one per line) to extract & download all at once.
             </p>
           </div>
         </div>
@@ -129,7 +181,7 @@ export default function BatchQueueModal({ isOpen, onClose, onProcessBatch, isPro
           <textarea
             className="input-field"
             rows={5}
-            placeholder={`https://www.youtube.com/watch?v=...\nhttps://www.instagram.com/reel/...\nhttps://www.tiktok.com/...`}
+            placeholder={`https://www.youtube.com/playlist?list=...\nhttps://www.youtube.com/watch?v=...\nhttps://www.instagram.com/reel/...`}
             value={linksText}
             onChange={(e) => setLinksText(e.target.value)}
             style={{
@@ -155,14 +207,14 @@ export default function BatchQueueModal({ isOpen, onClose, onProcessBatch, isPro
               className={formatType === 'audio' ? 'btn-primary' : 'btn-secondary'}
               style={{ padding: '8px 16px', fontSize: '0.85rem' }}
             >
-              Batch MP3 Audio
+              Batch MP3 Audio (320k)
             </button>
             <button
               onClick={() => setFormatType('video')}
               className={formatType === 'video' ? 'btn-primary' : 'btn-secondary'}
               style={{ padding: '8px 16px', fontSize: '0.85rem' }}
             >
-              Batch MP4 Video
+              Batch MP4 Video (1080p)
             </button>
           </div>
 
@@ -173,10 +225,13 @@ export default function BatchQueueModal({ isOpen, onClose, onProcessBatch, isPro
             style={{ padding: '10px 20px', fontSize: '0.9rem' }}
           >
             {isProcessing ? (
-              <div className="spinner" />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div className="spinner" />
+                <span style={{ fontSize: '0.8rem' }}>{statusMessage || 'Processing...'}</span>
+              </div>
             ) : (
               <>
-                <span>Start Batch Queue</span>
+                <span>Extract Playlist Tracks</span>
                 <ArrowRight size={16} />
               </>
             )}
@@ -186,48 +241,65 @@ export default function BatchQueueModal({ isOpen, onClose, onProcessBatch, isPro
         {/* Results Queue */}
         {batchResults.length > 0 && (
           <div style={{
-            maxHeight: '200px',
-            overflowY: 'auto',
             background: 'rgba(10, 12, 20, 0.7)',
             borderRadius: 'var(--radius-md)',
-            padding: '12px',
+            padding: '16px',
             border: '1px solid var(--border-color)'
           }}>
-            <h4 style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
-              Batch Progress ({batchResults.length} Ready)
-            </h4>
-            {batchResults.map((item) => (
-              <div
-                key={item.id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '8px 12px',
-                  background: 'rgba(255,255,255,0.03)',
-                  borderRadius: '6px',
-                  marginBottom: '6px',
-                  fontSize: '0.825rem'
-                }}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <h4 style={{ fontSize: '0.9rem', color: '#fff', fontWeight: 700 }}>
+                Extracted Tracks ({batchResults.length} Ready)
+              </h4>
+              <button
+                onClick={handleDownloadAll}
+                className="btn-primary"
+                style={{ padding: '6px 14px', fontSize: '0.8rem', gap: '6px' }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <CheckCircle2 size={16} color="#10b981" />
-                  <span style={{ fontWeight: 700 }}>{item.title}</span>
-                  <span style={{ color: 'var(--text-dim)' }}>({item.quality})</span>
-                </div>
-                <button
-                  onClick={() => onProcessBatch(item)}
-                  className="btn-secondary"
-                  style={{ padding: '4px 10px', fontSize: '0.75rem' }}
+                <Download size={14} />
+                <span>Save All Tracks</span>
+              </button>
+            </div>
+
+            <div style={{ maxHeight: '220px', overflowY: 'auto' }}>
+              {batchResults.map((item) => (
+                <div
+                  key={item.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '8px 12px',
+                    background: 'rgba(255,255,255,0.03)',
+                    borderRadius: '6px',
+                    marginBottom: '6px',
+                    fontSize: '0.825rem'
+                  }}
                 >
-                  <Download size={12} />
-                  <span>Save</span>
-                </button>
-              </div>
-            ))}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
+                    <CheckCircle2 size={16} color="#10b981" style={{ flexShrink: 0 }} />
+                    <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <span style={{ fontWeight: 700 }}>{item.title}</span>
+                      {item.uploader && <span style={{ color: 'var(--text-dim)', marginLeft: '6px', fontSize: '0.75rem' }}>• {item.uploader}</span>}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                    <span style={{ color: 'var(--text-dim)', fontSize: '0.75rem' }}>{item.formatLabel}</span>
+                    <button
+                      onClick={() => onProcessBatch(item)}
+                      className="btn-secondary"
+                      style={{ padding: '4px 10px', fontSize: '0.75rem', gap: '4px' }}
+                    >
+                      <Download size={12} />
+                      <span>Save</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
     </div>
   );
 }
+

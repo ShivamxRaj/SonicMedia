@@ -679,6 +679,77 @@ app.get('/api/info', async (req, res) => {
   });
 });
 
+// Extract YouTube/Social Playlist API
+app.get('/api/playlist', async (req, res) => {
+  const { url } = req.query;
+
+  let rawUrl = (url || '').trim();
+  const secondHttp = rawUrl.indexOf('http', 8);
+  if (secondHttp !== -1) {
+    rawUrl = rawUrl.substring(0, secondHttp);
+  }
+
+  const match = rawUrl.match(/(https?:\/\/[^\s>]+)/i);
+  let cleanUrl = match ? match[0] : null;
+
+  if (!cleanUrl) {
+    return res.status(400).json({ error: '⚠️ Please paste a valid playlist or video URL.' });
+  }
+
+  console.log(`[API /playlist] Extracting playlist entries for: ${cleanUrl}`);
+
+  const playlistArgs = [
+    '--flat-playlist',
+    '--dump-single-json',
+    '--user-agent', '',
+    '--no-check-certificates',
+    '--ignore-no-formats-error',
+    '--no-warnings',
+    cleanUrl
+  ];
+
+  runYtDlp(playlistArgs, (code, stdoutData, stderrData) => {
+    if (code !== 0 || !stdoutData) {
+      console.error('yt-dlp playlist stderr:', stderrData);
+      return res.status(400).json({ error: '⚠️ Could not read playlist link. Please verify the URL and try again.' });
+    }
+
+    try {
+      const data = JSON.parse(stdoutData);
+      const entries = Array.isArray(data.entries) ? data.entries : [data];
+
+      const tracks = entries.map((item, index) => {
+        const itemTitle = item.title || `Track #${index + 1}`;
+        const itemUrl = item.url || (item.id ? `https://www.youtube.com/watch?v=${item.id}` : cleanUrl);
+        const itemDuration = formatDuration(item.duration || item.duration_string);
+        const itemUploader = item.uploader || item.channel || data.uploader || 'Artist';
+        let itemThumbnail = item.thumbnail;
+        if (!itemThumbnail && item.thumbnails && item.thumbnails.length > 0) {
+          itemThumbnail = item.thumbnails[item.thumbnails.length - 1].url;
+        }
+
+        return {
+          id: index + 1,
+          title: itemTitle,
+          uploader: itemUploader,
+          duration: itemDuration,
+          url: itemUrl,
+          thumbnail: itemThumbnail || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=800&q=80'
+        };
+      });
+
+      return res.json({
+        playlistTitle: data.title || 'Playlist',
+        itemCount: tracks.length,
+        tracks
+      });
+    } catch (e) {
+      console.error('Playlist JSON parse error:', e);
+      return res.status(400).json({ error: '⚠️ Failed to parse playlist data.' });
+    }
+  });
+});
+
 // Stream Download Handler API (INSTANT HEADERS & DIRECT FFMPEG AUDIO FILTER PIPE)
 app.get('/api/download', (req, res) => {
   const { url, type, quality, speed, title } = req.query;
@@ -690,20 +761,33 @@ app.get('/api/download', (req, res) => {
   }
 
   const match = rawUrl.match(/(https?:\/\/[^\s>]+)/i);
-  const cleanUrl = match ? match[0] : null;
+  let cleanUrl = match ? match[0] : null;
 
   if (!cleanUrl) {
     return res.status(400).send('⚠️ Valid video or music URL is required.');
   }
 
-  const safeAsciiTitle = (title || 'sonicmedia-download').replace(/[^a-zA-Z0-9_\-\s.]/g, '_').replace(/\s+/g, ' ').trim();
+  let targetDownloadUrl = cleanUrl;
+  let isPurePlaylist = false;
+
+  // Clean playlist parameters if video ID is present to target single video cleanly
+  if (targetDownloadUrl.includes('watch?v=') && targetDownloadUrl.includes('list=')) {
+    targetDownloadUrl = targetDownloadUrl.replace(/([?&])list=[^&]+&?/, '$1').replace(/[?&]$/, '');
+  } else if (targetDownloadUrl.includes('/playlist?') || targetDownloadUrl.includes('/sets/')) {
+    isPurePlaylist = true;
+  }
+
+  const safeAsciiTitle = (title || 'sonicmedia-download')
+    .replace(/#/g, '')
+    .replace(/[^a-zA-Z0-9_\-\s.]/g, '_')
+    .replace(/\s+/g, ' ')
+    .trim();
   const ext = type === 'audio' ? 'mp3' : 'mp4';
   const filename = `${safeAsciiTitle}.${ext}`;
 
-  console.log(`[API /download] Direct Media Stream Request for [${type} - ${quality || 'best'} - speed ${speed || '1.0x'}]: ${cleanUrl} -> ${filename}`);
+  console.log(`[API /download] Direct Media Stream Request for [${type} - ${quality || 'best'} - speed ${speed || '1.0x'}]: ${targetDownloadUrl} -> ${filename}`);
 
   // ⚡ CRITICAL FIX: Send HTTP Response Headers IMMEDIATELY (< 50ms) to Chrome
-  // This prevents Chrome connection timeouts and eliminates "Site wasn't available" errors completely!
   if (!res.headersSent) {
     res.setHeader('Content-Type', type === 'audio' ? 'audio/mpeg' : 'video/mp4');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
@@ -718,12 +802,14 @@ app.get('/api/download', (req, res) => {
   const FFMPEG_BIN = path.join(process.cwd(), 'node_modules', 'ffmpeg-static', process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg');
   const hasFfmpeg = fs.existsSync(FFMPEG_BIN);
 
+  const qLower = (quality || '').toLowerCase();
+
   if (type === 'audio') {
-    // Determine audio bitrate quality
-    let audioBitrate = '256k';
-    if (quality === '320k') audioBitrate = '320k';
-    else if (quality === '128k') audioBitrate = '128k';
-    else if (quality === 'm4a') audioBitrate = '256k';
+    // Flexible quality matching for 320k, 256k, 128k, m4a or 'MP3 320kbps'
+    let audioQualityArg = '2';
+    if (qLower.includes('320')) audioQualityArg = '0';
+    else if (qLower.includes('128')) audioQualityArg = '5';
+    else if (qLower.includes('256')) audioQualityArg = '2';
 
     // Build FFmpeg Audio Filter for Playback Tempo / Pitch Modifiers
     let afFilter = null;
@@ -741,21 +827,24 @@ app.get('/api/download', (req, res) => {
     }
     const tempFilePath = path.join(tempDir, `audio_${Date.now()}_${Math.random().toString(36).substring(7)}.mp3`);
 
+    const playlistHandlingArgs = isPurePlaylist ? ['--playlist-items', '1'] : ['--no-playlist'];
+
     const audioArgs = [
       '-q',
       '--no-progress',
       '-x',
       '--audio-format', 'mp3',
-      '--audio-quality', quality === '320k' ? '0' : (quality === '128k' ? '5' : '2'),
+      '--audio-quality', audioQualityArg,
       '--extractor-args', 'youtube:player_client=android,web',
       '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
       '--no-check-certificates',
-      '--no-playlist',
+      ...playlistHandlingArgs,
       '-o', tempFilePath
     ];
     if (hasFfmpeg) audioArgs.push('--ffmpeg-location', FFMPEG_BIN);
     if (afFilter && hasFfmpeg) audioArgs.push('--postprocessor-args', `ffmpeg:-af "${afFilter}"`);
-    audioArgs.push(cleanUrl);
+    audioArgs.push(targetDownloadUrl);
+
 
     function tryAudioConvert(index) {
       if (index >= commands.length) {
@@ -813,6 +902,8 @@ app.get('/api/download', (req, res) => {
   }
   const tempVideoPath = path.join(tempDir, `video_${Date.now()}_${Math.random().toString(36).substring(7)}.mp4`);
 
+  const playlistHandlingArgs = isPurePlaylist ? ['--playlist-items', '1'] : ['--no-playlist'];
+
   const videoArgs = [
     '-q',
     '--no-progress',
@@ -821,7 +912,7 @@ app.get('/api/download', (req, res) => {
     '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     '--no-check-certificates',
     '--ignore-no-formats-error',
-    '--no-playlist',
+    ...playlistHandlingArgs,
     '-o', tempVideoPath
   ];
 
@@ -829,7 +920,7 @@ app.get('/api/download', (req, res) => {
     videoArgs.push('--ffmpeg-location', FFMPEG_BIN);
   }
 
-  videoArgs.push(cleanUrl);
+  videoArgs.push(targetDownloadUrl);
 
   function tryVideoConvert(index) {
     if (index >= commands.length) {
