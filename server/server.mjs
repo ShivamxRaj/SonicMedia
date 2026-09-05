@@ -246,12 +246,19 @@ function pollTelegramUpdates() {
               if (cbData.startsWith('approve_')) {
                 const utr = cbData.replace('approve_', '');
                 const record = pendingPayments.get(utr) || getPayments().find(p => p.utr === utr) || { utr, amount: 9 };
+                const now = Date.now();
+                const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+                
                 record.status = 'VERIFIED_PRO_ACTIVE';
+                record.activatedAt = now;
+                record.expiresAt = now + THIRTY_DAYS_MS;
+                record.expiryDateStr = new Date(record.expiresAt).toLocaleDateString();
+                
                 pendingPayments.set(utr, record);
                 savePayment(record);
-                console.log(`✅ [TELEGRAM APPROVED] UTR: ${utr}`);
+                console.log(`✅ [TELEGRAM APPROVED] UTR: ${utr} | Valid until: ${record.expiryDateStr}`);
 
-                answerTelegramCallback(cbId, '✅ PRO Pass Activated for user!');
+                answerTelegramCallback(cbId, `✅ PRO Pass Activated for 30 Days (Expires: ${record.expiryDateStr})!`);
               } else if (cbData.startsWith('reject_')) {
                 const utr = cbData.replace('reject_', '');
                 const record = pendingPayments.get(utr) || getPayments().find(p => p.utr === utr) || { utr, amount: 9 };
@@ -585,9 +592,19 @@ app.get('/api/payment-status', (req, res) => {
   const record = pendingPayments.get(cleanUtr) || getPayments().find(p => p.utr === cleanUtr);
 
   if (record) {
+    // Automated 30-Day Expiry Check
+    if (record.status === 'VERIFIED_PRO_ACTIVE' && record.expiresAt && Date.now() > record.expiresAt) {
+      record.status = 'EXPIRED';
+      pendingPayments.set(cleanUtr, record);
+      savePayment(record);
+      return res.json({ utr: cleanUtr, status: 'EXPIRED', message: 'PRO Pass subscription expired after 30 days.' });
+    }
+
     return res.json({
       utr: cleanUtr,
-      status: record.status
+      status: record.status,
+      expiresAt: record.expiresAt,
+      daysRemaining: record.expiresAt ? Math.max(0, Math.ceil((record.expiresAt - Date.now()) / (1000 * 60 * 60 * 24))) : 30
     });
   }
 
