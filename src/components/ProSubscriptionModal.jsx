@@ -254,21 +254,23 @@ export default function ProSubscriptionModal({ isOpen, onClose, isPro, onActivat
           {/* Conditional UTR Input vs Waiting State */}
           {isPolling ? (
             <div style={{
-              background: 'rgba(56, 189, 248, 0.12)',
-              border: '1px solid rgba(56, 189, 248, 0.3)',
+              background: 'linear-gradient(135deg, rgba(147, 51, 234, 0.15) 0%, rgba(56, 189, 248, 0.15) 100%)',
+              border: '1px solid rgba(56, 189, 248, 0.4)',
               borderRadius: 'var(--radius-md)',
-              padding: '10px',
+              padding: '12px 14px',
               marginBottom: '10px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px',
-              color: '#38bdf8',
-              fontSize: '0.8rem',
-              fontWeight: 600
+              textAlign: 'center',
+              boxShadow: '0 8px 25px rgba(56, 189, 248, 0.15)'
             }}>
-              <Loader2 size={16} className="spinner" />
-              <span>Waiting for Admin Telegram Approval...</span>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '4px' }}>
+                <Loader2 size={16} color="#38bdf8" className="spinner" />
+                <span style={{ color: '#ffffff', fontSize: '0.85rem', fontWeight: 700 }}>
+                  Verifying UTR Ref #{utrNumber}...
+                </span>
+              </div>
+              <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', margin: 0 }}>
+                ⚡ Confirming receipt details. PRO Pass unlocks instantly upon verification.
+              </p>
             </div>
           ) : (
             <div>
