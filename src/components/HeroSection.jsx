@@ -98,13 +98,7 @@ export default function HeroSection({ url, setUrl, onAnalyze, loading, error, on
           className="input-field"
           placeholder="Paste social media URL here (or press Ctrl+V for auto-fetch)..."
           value={url}
-          onChange={(e) => {
-            const val = e.target.value;
-            setUrl(val);
-            if (val.startsWith('http://') || val.startsWith('https://')) {
-              onAnalyze(val);
-            }
-          }}
+          onChange={(e) => setUrl(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && url.trim()) {
               onAnalyze(url.trim());

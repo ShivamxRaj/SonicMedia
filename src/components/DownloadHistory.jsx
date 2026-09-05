@@ -87,7 +87,7 @@ export default function DownloadHistory({ history, onClearHistory, onReDownload 
                   {item.title}
                 </h4>
                 <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                  {item.formatLabel} • {item.timestamp}
+                  {item.formatLabel}{item.speed && item.speed !== '1.0x' ? ` • Tempo ${item.speed}` : ''} • {item.timestamp}
                 </p>
               </div>
             </div>

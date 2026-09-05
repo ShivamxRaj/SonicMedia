@@ -125,7 +125,8 @@ export default function App() {
 
   // Trigger Native Browser File Download Engine (Chrome / Firefox / Safari native download bar)
   const handleDownload = (item) => {
-    const downloadTarget = item.download_url || `/api/download?url=${encodeURIComponent(item.url)}&type=${item.type}&quality=${item.quality}&title=${encodeURIComponent(item.title)}`;
+    const speedParam = item.speed ? `&speed=${encodeURIComponent(item.speed)}` : '';
+    const downloadTarget = item.download_url || `/api/download?url=${encodeURIComponent(item.url)}&type=${item.type}&quality=${item.quality}${speedParam}&title=${encodeURIComponent(item.title)}`;
     
     // Direct native browser link trigger for native browser download manager
     const link = document.createElement('a');
@@ -143,11 +144,13 @@ export default function App() {
       url: item.url,
       type: item.type,
       quality: item.quality,
+      speed: item.speed || '1.0x',
       formatLabel: item.formatLabel,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
-    const updated = [historyItem, ...history.filter(h => h.url !== item.url || h.quality !== item.quality).slice(0, 9)];
+    // ⚡ Keep max 3 recent download items only! Older items automatically disappear
+    const updated = [historyItem, ...history.filter(h => h.url !== item.url || h.quality !== item.quality)].slice(0, 3);
     saveHistory(updated);
   };
 

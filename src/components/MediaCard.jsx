@@ -45,39 +45,26 @@ export default function MediaCard({ media, onDownload, onPreview, isPro, onOpenP
     }
 
     setIsDownloading(true);
-    setDownloadProgress(15);
+    setDownloadProgress(100);
     setDownloadSuccess(false);
 
-    const timer = setInterval(() => {
-      setDownloadProgress((prev) => {
-        if (prev >= 95) {
-          clearInterval(timer);
-          return 95;
-        }
-        return prev + 15;
-      });
-    }, 300);
+    // ⚡ Instant native download trigger!
+    onDownload({
+      url: media.url,
+      type: activeTab,
+      quality: selectedQuality,
+      speed: activeTab === 'audio' ? (audioSettings.speed || '1.0x') : '1.0x',
+      title: audioSettings.customTitle || media.title,
+      uploader: audioSettings.customArtist || media.uploader,
+      formatLabel: currentFormat.label,
+      audioSettings: activeTab === 'audio' ? audioSettings : null
+    });
 
     setTimeout(() => {
-      clearInterval(timer);
-      setDownloadProgress(100);
-
-      onDownload({
-        url: media.url,
-        type: activeTab,
-        quality: selectedQuality,
-        title: audioSettings.customTitle || media.title,
-        uploader: audioSettings.customArtist || media.uploader,
-        formatLabel: currentFormat.label,
-        audioSettings: activeTab === 'audio' ? audioSettings : null
-      });
-
-      setTimeout(() => {
-        setIsDownloading(false);
-        setDownloadSuccess(true);
-        setTimeout(() => setDownloadSuccess(false), 4000);
-      }, 800);
-    }, 2200);
+      setIsDownloading(false);
+      setDownloadSuccess(true);
+      setTimeout(() => setDownloadSuccess(false), 4000);
+    }, 400);
   };
 
   return (
