@@ -166,7 +166,7 @@ export default function BatchQueueModal({ isOpen, onClose, onProcessBatch, isPro
           </div>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <h3 style={{ fontSize: '1.3rem', fontWeight: 800 }}>Batch Multi-Link & Playlist Queue</h3>
+              <h3 style={{ fontSize: '1.3rem', fontWeight: 800 }}>Batch Queue</h3>
               {!isPro && (
                 <span style={{ fontSize: '0.75rem', color: '#ec4899', background: 'rgba(236, 72, 153, 0.15)', padding: '2px 8px', borderRadius: '10px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                   <Lock size={10} /> PRO (Max 2 for Free)
