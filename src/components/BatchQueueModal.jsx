@@ -11,7 +11,10 @@ export default function BatchQueueModal({ isOpen, onClose, onProcessBatch, isPro
 
   if (!isOpen) return null;
 
-  const handleStartBatch = async () => {
+  const handleStartBatch = async (selectedFormat) => {
+    const targetFormat = selectedFormat || formatType;
+    if (selectedFormat) setFormatType(selectedFormat);
+
     const lines = linksText
       .split('\n')
       .map((l) => l.trim())
@@ -50,9 +53,9 @@ export default function BatchQueueModal({ isOpen, onClose, onProcessBatch, isPro
                 title: track.title,
                 uploader: track.uploader,
                 duration: track.duration,
-                type: formatType,
-                quality: formatType === 'audio' ? '320k' : '1080p',
-                formatLabel: formatType === 'audio' ? 'MP3 320kbps' : 'MP4 1080p',
+                type: targetFormat,
+                quality: targetFormat === 'audio' ? '320k' : '1080p',
+                formatLabel: targetFormat === 'audio' ? 'MP3 320kbps' : 'MP4 1080p',
                 status: 'completed',
                 timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
               });
@@ -70,9 +73,9 @@ export default function BatchQueueModal({ isOpen, onClose, onProcessBatch, isPro
             title: title,
             uploader: res.data?.uploader || 'Artist',
             duration: res.data?.duration || '',
-            type: formatType,
-            quality: formatType === 'audio' ? '320k' : '1080p',
-            formatLabel: formatType === 'audio' ? 'MP3 320kbps' : 'MP4 1080p',
+            type: targetFormat,
+            quality: targetFormat === 'audio' ? '320k' : '1080p',
+            formatLabel: targetFormat === 'audio' ? 'MP3 320kbps' : 'MP4 1080p',
             status: 'completed',
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
           });
@@ -85,9 +88,9 @@ export default function BatchQueueModal({ isOpen, onClose, onProcessBatch, isPro
           title: `Media Track ${currentId}`,
           uploader: 'Social Media',
           duration: '',
-          type: formatType,
-          quality: formatType === 'audio' ? '320k' : '1080p',
-          formatLabel: formatType === 'audio' ? 'MP3 320kbps' : 'MP4 1080p',
+          type: targetFormat,
+          quality: targetFormat === 'audio' ? '320k' : '1080p',
+          formatLabel: targetFormat === 'audio' ? 'MP3 320kbps' : 'MP4 1080p',
           status: 'completed',
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         });
@@ -192,47 +195,63 @@ export default function BatchQueueModal({ isOpen, onClose, onProcessBatch, isPro
           />
         </div>
 
-        {/* Format Selector */}
+        {/* Format Action Buttons */}
         <div style={{
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-between',
+          gap: '12px',
           marginBottom: '20px',
-          flexWrap: 'wrap',
-          gap: '10px'
+          flexWrap: 'wrap'
         }}>
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <button
-              onClick={() => setFormatType('audio')}
-              className={formatType === 'audio' ? 'btn-primary' : 'btn-secondary'}
-              style={{ padding: '8px 16px', fontSize: '0.85rem' }}
-            >
-              Batch MP3 Audio (320k)
-            </button>
-            <button
-              onClick={() => setFormatType('video')}
-              className={formatType === 'video' ? 'btn-primary' : 'btn-secondary'}
-              style={{ padding: '8px 16px', fontSize: '0.85rem' }}
-            >
-              Batch MP4 Video (1080p)
-            </button>
-          </div>
-
           <button
-            onClick={handleStartBatch}
+            onClick={() => handleStartBatch('audio')}
             disabled={isProcessing || !linksText.trim()}
             className="btn-primary"
-            style={{ padding: '10px 20px', fontSize: '0.9rem' }}
+            style={{
+              flex: 1,
+              minWidth: '200px',
+              padding: '12px 18px',
+              fontSize: '0.9rem',
+              justifyContent: 'center',
+              opacity: isProcessing && formatType !== 'audio' ? 0.5 : 1
+            }}
           >
-            {isProcessing ? (
+            {isProcessing && formatType === 'audio' ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <div className="spinner" />
-                <span style={{ fontSize: '0.8rem' }}>{statusMessage || 'Processing...'}</span>
+                <span style={{ fontSize: '0.825rem' }}>{statusMessage || 'Extracting...'}</span>
               </div>
             ) : (
               <>
-                <span>Extract Playlist Tracks</span>
-                <ArrowRight size={16} />
+                <Download size={16} />
+                <span>Batch MP3 Audio (320k)</span>
+              </>
+            )}
+          </button>
+
+          <button
+            onClick={() => handleStartBatch('video')}
+            disabled={isProcessing || !linksText.trim()}
+            className="btn-primary"
+            style={{
+              flex: 1,
+              minWidth: '200px',
+              padding: '12px 18px',
+              fontSize: '0.9rem',
+              justifyContent: 'center',
+              background: formatType === 'video' ? 'var(--primary-gradient)' : 'rgba(255, 255, 255, 0.08)',
+              opacity: isProcessing && formatType !== 'video' ? 0.5 : 1
+            }}
+          >
+            {isProcessing && formatType === 'video' ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div className="spinner" />
+                <span style={{ fontSize: '0.825rem' }}>{statusMessage || 'Extracting...'}</span>
+              </div>
+            ) : (
+              <>
+                <Download size={16} />
+                <span>Batch MP4 Video (1080p)</span>
               </>
             )}
           </button>
