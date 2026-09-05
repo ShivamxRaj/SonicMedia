@@ -316,6 +316,13 @@ h1, h2, h3, h4, h5, h6 {
   white-space: nowrap;
 }
 
+.nav-text-short {
+  display: none;
+}
+.nav-text-full {
+  display: inline;
+}
+
 /* Hero Section Styles */
 .hero-input-box {
   padding: 10px;
@@ -466,5 +473,15 @@ div[style*="position:fixed"] {
     font-size: 0.7rem !important;
   }
 }
+
+@media (max-width: 520px) {
+  .nav-text-full {
+    display: none !important;
+  }
+  .nav-text-short {
+    display: inline !important;
+  }
+}
+
 
 

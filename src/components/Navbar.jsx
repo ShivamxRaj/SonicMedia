@@ -6,18 +6,8 @@ export default function Navbar({ onOpenBatchModal, onOpenProModal, onOpenApiModa
     <header className="header-nav">
       <div className="header-brand" style={{ cursor: 'pointer' }} onClick={() => window.location.href = '/'}>
         {/* Clean Minimalist Music Note Badge */}
-        <div style={{
-          width: '38px',
-          height: '38px',
-          borderRadius: '12px',
-          background: 'var(--primary-gradient)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          boxShadow: '0 6px 20px rgba(168, 85, 247, 0.35)',
-          flexShrink: 0
-        }}>
-          <Music size={20} color="#ffffff" />
+        <div className="brand-logo-icon">
+          <Music size={18} color="#ffffff" />
         </div>
 
         <div className="brand-text-container">
@@ -35,34 +25,42 @@ export default function Navbar({ onOpenBatchModal, onOpenProModal, onOpenApiModa
         <button
           onClick={onOpenApiModal}
           className="btn-secondary nav-btn"
+          title="Developer API Portal"
         >
           <Code size={14} color="#38bdf8" />
-          <span className="nav-btn-text">API Portal</span>
+          <span className="nav-text-full">API Portal</span>
+          <span className="nav-text-short">API</span>
         </button>
 
         <button
           onClick={onOpenBatchModal}
           className="btn-secondary nav-btn"
+          title="Batch Queue Downloader"
         >
           <Layers size={14} color="#06b6d4" />
-          <span className="nav-btn-text">Batch Queue</span>
+          <span className="nav-text-full">Batch Queue</span>
+          <span className="nav-text-short">Batch</span>
         </button>
 
         {isPro ? (
           <div className="platform-badge nav-btn" style={{ background: 'rgba(16, 185, 129, 0.2)', borderColor: 'rgba(16, 185, 129, 0.4)', color: '#10b981', fontWeight: 800 }}>
             <Zap size={14} />
-            <span>PRO ACTIVE</span>
+            <span className="nav-text-full">PRO ACTIVE</span>
+            <span className="nav-text-short">PRO</span>
           </div>
         ) : (
           <button
             onClick={onOpenProModal}
             className="btn-primary nav-btn"
+            title="Get PRO Studio Membership"
           >
             <Sparkles size={14} />
-            <span>Get PRO</span>
+            <span className="nav-text-full">Get PRO</span>
+            <span className="nav-text-short">PRO</span>
           </button>
         )}
       </div>
     </header>
   );
 }
+
