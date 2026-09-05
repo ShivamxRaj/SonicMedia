@@ -275,12 +275,16 @@ export default function ProSubscriptionModal({ isOpen, onClose, isPro, onActivat
               <div style={{ display: 'flex', gap: '8px', marginBottom: '4px' }}>
                 <input
                   type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   className="input-field"
                   placeholder="Enter 12-digit UPI Ref ID..."
                   value={utrNumber}
                   maxLength={12}
                   onChange={(e) => {
-                    setUtrNumber(e.target.value);
+                    // Strict numeric filtering: allow ONLY 0-9 digits
+                    const val = e.target.value.replace(/\D/g, '').slice(0, 12);
+                    setUtrNumber(val);
                     if (utrError) setUtrError('');
                   }}
                   style={{ padding: '8px 12px', fontSize: '0.825rem' }}
@@ -288,14 +292,14 @@ export default function ProSubscriptionModal({ isOpen, onClose, isPro, onActivat
                 <button
                   onClick={handleVerifyUtr}
                   className="btn-primary"
-                  disabled={!utrNumber.trim() || isSubmitting}
+                  disabled={utrNumber.length !== 12 || isSubmitting}
                   style={{ padding: '8px 14px', fontSize: '0.825rem', whiteSpace: 'nowrap' }}
                 >
                   {utrSuccess ? 'Verified!' : isSubmitting ? 'Verifying...' : 'Unlock PRO'}
                 </button>
               </div>
               <p style={{ fontSize: '0.7rem', color: 'var(--text-dim)', marginBottom: utrError ? '4px' : '10px', textAlign: 'left' }}>
-                💡 Enter 12-digit <strong>UPI Ref ID</strong> from PhonePe/GPay receipt.
+                💡 Enter 12-digit <strong>UPI Ref ID</strong> (e.g. 624483836603) from PhonePe/GPay receipt.
               </p>
             </div>
           )}
