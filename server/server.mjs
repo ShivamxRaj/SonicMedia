@@ -501,6 +501,7 @@ app.get('/api/debug', (req, res) => {
   }
 
   const testPipeArgs = [
+    '-4',
     '-q',
     '--no-progress',
     '-o', '-',
@@ -654,6 +655,7 @@ app.get('/api/info', async (req, res) => {
   console.log(`[API /info] Extracting metadata & direct CDN streams for [${platform.name}]: ${cleanUrl}`);
 
   const infoArgs = [
+    '-4',
     '--dump-single-json',
     '--extractor-args', 'youtube:player_client=android',
     '--no-check-certificates',
@@ -860,6 +862,7 @@ app.get('/api/download', (req, res) => {
 
     // ⚡ INSTANT DIRECT CDN FFMPEG PIPE ENGINE (0-Second Latency Header Response)
     const getUrlArgs = [
+      '-4',
       '-g',
       '-f', '251/140/ba/b/best',
       '--extractor-args', 'youtube:player_client=android',
@@ -1004,6 +1007,7 @@ app.get('/api/download', (req, res) => {
     const tempFilePath = path.join(tempDir, `audio_${Date.now()}_${Math.random().toString(36).substring(7)}.mp3`);
 
     const audioArgs = [
+      '-4',
       '-q',
       '--no-progress',
       '--extractor-args', 'youtube:player_client=android',
@@ -1110,6 +1114,7 @@ app.get('/api/download', (req, res) => {
   const playlistHandlingArgs = isPurePlaylist ? ['--playlist-items', '1'] : ['--no-playlist'];
 
   const videoArgs = [
+    '-4',
     '-q',
     '--no-progress',
     '--extractor-args', 'youtube:player_client=android',
