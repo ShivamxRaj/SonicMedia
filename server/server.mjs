@@ -37,6 +37,14 @@ function getCookieArgs() {
   return [];
 }
 
+function getExtractorArgs() {
+  const hasCookies = getCookieArgs().length > 0;
+  if (hasCookies) {
+    return [];
+  }
+  return ['--extractor-args', 'youtube:player_client=android'];
+}
+
 // Download & Auto-Update standalone yt-dlp binary atomically via GitHub releases
 function ensureYtDlpBinary(forceUpdate = false, callback = null) {
   const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
@@ -513,10 +521,11 @@ app.get('/api/debug', (req, res) => {
     '-4',
     '-q',
     '--no-progress',
+    '--remote-components', 'ejs:github',
     '--js-runtimes', 'node',
     '-o', '-',
     '-f', 'ba/b/18/best',
-    '--extractor-args', 'youtube:player_client=android',
+    ...getExtractorArgs(),
     '--geo-bypass',
     '--geo-bypass-country', 'US',
     '--no-check-certificates',
@@ -594,8 +603,9 @@ app.get('/api/debug-g', (req, res) => {
     '-4',
     '-g',
     '-f', 'ba/b/18/best',
+    '--remote-components', 'ejs:github',
     '--js-runtimes', 'node',
-    '--extractor-args', 'youtube:player_client=android',
+    ...getExtractorArgs(),
     '--geo-bypass',
     '--geo-bypass-country', 'US',
     '--no-check-certificates',
@@ -750,8 +760,9 @@ app.get('/api/info', async (req, res) => {
   const infoArgs = [
     '-4',
     '--dump-single-json',
+    '--remote-components', 'ejs:github',
     '--js-runtimes', 'node',
-    '--extractor-args', 'youtube:player_client=android',
+    ...getExtractorArgs(),
     '--geo-bypass',
     '--geo-bypass-country', 'US',
     '--no-check-certificates',
@@ -962,8 +973,9 @@ app.get('/api/download', (req, res) => {
       '-4',
       '-g',
       '-f', 'ba/b/18/best',
+      '--remote-components', 'ejs:github',
       '--js-runtimes', 'node',
-      '--extractor-args', 'youtube:player_client=android',
+      ...getExtractorArgs(),
       '--geo-bypass',
       '--geo-bypass-country', 'US',
       '--no-check-certificates',
@@ -1111,8 +1123,9 @@ app.get('/api/download', (req, res) => {
       '-4',
       '-q',
       '--no-progress',
+      '--remote-components', 'ejs:github',
       '--js-runtimes', 'node',
-      '--extractor-args', 'youtube:player_client=android',
+      ...getExtractorArgs(),
       '--geo-bypass',
       '--geo-bypass-country', 'US',
       '-x',
@@ -1233,8 +1246,9 @@ app.get('/api/download', (req, res) => {
     '-4',
     '-q',
     '--no-progress',
+    '--remote-components', 'ejs:github',
     '--js-runtimes', 'node',
-    '--extractor-args', 'youtube:player_client=android',
+    ...getExtractorArgs(),
     '--geo-bypass',
     '--geo-bypass-country', 'US',
     '-f', formatString,
