@@ -30,7 +30,7 @@ function getCookieArgs() {
 }
 
 function getExtractorArgs() {
-  return ['--extractor-args', 'youtube:player_client=android,android_vr,mweb,web'];
+  return ['--extractor-args', 'youtube:player_client=mweb,android,ios,web'];
 }
 
 // Download & Auto-Update standalone yt-dlp binary atomically via GitHub releases
@@ -952,6 +952,7 @@ app.get('/api/download', (req, res) => {
       '-4',
       '-g',
       '-f', '251/250/249/140/ba/b/best',
+      '--js-runtimes', 'node',
       ...getExtractorArgs(),
       '--geo-bypass',
       '--geo-bypass-country', 'US',
