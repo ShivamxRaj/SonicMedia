@@ -643,6 +643,13 @@ app.get('/api/info', async (req, res) => {
     return res.status(400).json({ error: '⚠️ Please paste a valid video or track URL.' });
   }
 
+  if (cleanUrl.includes('/shorts/')) {
+    const shortsMatch = cleanUrl.match(/\/shorts\/([a-zA-Z0-9_-]+)/);
+    if (shortsMatch && shortsMatch[1]) {
+      cleanUrl = `https://www.youtube.com/watch?v=${shortsMatch[1]}`;
+    }
+  }
+
   const platform = detectPlatform(cleanUrl);
 
   console.log(`[API /info] Extracting metadata & direct CDN streams for [${platform.name}]: ${cleanUrl}`);
@@ -803,7 +810,12 @@ app.get('/api/download', (req, res) => {
   let isPurePlaylist = false;
 
   // Clean playlist parameters if video ID is present to target single video cleanly
-  if (targetDownloadUrl.includes('watch?v=') && targetDownloadUrl.includes('list=')) {
+  if (targetDownloadUrl.includes('/shorts/')) {
+    const shortsMatch = targetDownloadUrl.match(/\/shorts\/([a-zA-Z0-9_-]+)/);
+    if (shortsMatch && shortsMatch[1]) {
+      targetDownloadUrl = `https://www.youtube.com/watch?v=${shortsMatch[1]}`;
+    }
+  } else if (targetDownloadUrl.includes('watch?v=') && targetDownloadUrl.includes('list=')) {
     targetDownloadUrl = targetDownloadUrl.replace(/([?&])list=[^&]+&?/, '$1').replace(/[?&]$/, '');
   } else if (targetDownloadUrl.includes('/playlist?') || targetDownloadUrl.includes('/sets/')) {
     isPurePlaylist = true;
@@ -851,7 +863,7 @@ app.get('/api/download', (req, res) => {
     const getUrlArgs = [
       '-g',
       '-f', 'ba/b/best',
-      '--js-runtimes', `node:${process.execPath}`,
+      '--js-runtimes', 'node',
       '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
       '--no-check-certificates',
       ...playlistHandlingArgs,
@@ -878,10 +890,10 @@ app.get('/api/download', (req, res) => {
         if (!handled) {
           handled = true;
           try { ytdlp.kill('SIGKILL'); } catch (e) {}
-          console.error(`[tryCdnPipe ${label}] timed out after 15s, trying next strategy...`);
+          console.error(`[tryCdnPipe ${label}] timed out after 8s, trying next strategy...`);
           tryCdnPipe(index + 1);
         }
-      }, 15000);
+      }, 8000);
 
       ytdlp.on('error', (err) => {
         if (!handled) {
@@ -979,7 +991,7 @@ app.get('/api/download', (req, res) => {
     const audioArgs = [
       '-q',
       '--no-progress',
-      '--js-runtimes', `node:${process.execPath}`,
+      '--js-runtimes', 'node',
       '-x',
       '--audio-format', 'mp3',
       '--audio-quality', audioQualityArg,
@@ -1086,7 +1098,7 @@ app.get('/api/download', (req, res) => {
   const videoArgs = [
     '-q',
     '--no-progress',
-    '--js-runtimes', `node:${process.execPath}`,
+    '--js-runtimes', 'node',
     '-f', formatString,
     '--merge-output-format', 'mp4',
     '--concurrent-fragments', '5',

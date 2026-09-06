@@ -17,6 +17,7 @@ export default function MediaCard({ media, onDownload, onPreview, isPro, onOpenP
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
+  const [streamedSize, setStreamedSize] = useState('');
 
   if (!media) return null;
 
@@ -48,12 +49,13 @@ export default function MediaCard({ media, onDownload, onPreview, isPro, onOpenP
     setIsDownloading(true);
     setDownloadProgress(10);
     setDownloadSuccess(false);
+    setStreamedSize('');
 
     let currentProg = 10;
     const progressInterval = setInterval(() => {
-      currentProg = Math.min(currentProg + Math.floor(Math.random() * 7) + 3, 92);
+      currentProg = Math.min(currentProg + Math.floor(Math.random() * 5) + 2, 98);
       setDownloadProgress(currentProg);
-    }, 450);
+    }, 400);
 
     try {
       const res = await onDownload(
@@ -67,9 +69,12 @@ export default function MediaCard({ media, onDownload, onPreview, isPro, onOpenP
           formatLabel: currentFormat.label,
           audioSettings: activeTab === 'audio' ? audioSettings : null
         },
-        (realPercent) => {
-          clearInterval(progressInterval);
-          setDownloadProgress(Math.max(realPercent, currentProg));
+        (realPercent, mbStr) => {
+          if (mbStr) setStreamedSize(mbStr);
+          if (realPercent !== null && realPercent !== undefined) {
+            clearInterval(progressInterval);
+            setDownloadProgress(Math.max(realPercent, currentProg));
+          }
         }
       );
 
@@ -80,9 +85,11 @@ export default function MediaCard({ media, onDownload, onPreview, isPro, onOpenP
         setTimeout(() => {
           setDownloadSuccess(false);
           setDownloadProgress(0);
+          setStreamedSize('');
         }, 5000);
       } else {
         setDownloadProgress(0);
+        setStreamedSize('');
       }
     } finally {
       clearInterval(progressInterval);
@@ -367,8 +374,11 @@ export default function MediaCard({ media, onDownload, onPreview, isPro, onOpenP
                 border: '1px solid var(--primary-purple)'
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '0.875rem' }}>
-                  <span style={{ color: '#38bdf8', fontWeight: 600 }}>
-                    {selectedQuality === '2160p' || selectedQuality === 'mp4-4k' ? '✨ Applying 4K HDR Color Grade & Sharpening Filters...' : `Streaming ${activeTab.toUpperCase()}...`}
+                  <span style={{ color: '#38bdf8', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#38bdf8', animation: 'ping 1.2s cubic-bezier(0, 0, 0.2, 1) infinite' }} />
+                    {selectedQuality === '2160p' || selectedQuality === 'mp4-4k' 
+                      ? '✨ Applying 4K HDR Color Grade & Sharpening Filters...' 
+                      : `Streaming ${activeTab.toUpperCase()}... ${streamedSize ? `(${streamedSize})` : ''}`}
                   </span>
                   <span style={{ fontWeight: 700 }}>{downloadProgress}%</span>
                 </div>

@@ -160,9 +160,14 @@ export default function App() {
         chunks.push(value);
         receivedBytes += value.length;
 
-        if (totalBytes > 0 && typeof onProgress === 'function') {
-          const percent = Math.min(Math.round((receivedBytes / totalBytes) * 100), 99);
-          onProgress(percent);
+        if (typeof onProgress === 'function') {
+          const mbStr = (receivedBytes / (1024 * 1024)).toFixed(1) + ' MB';
+          if (totalBytes > 0) {
+            const percent = Math.min(Math.round((receivedBytes / totalBytes) * 100), 99);
+            onProgress(percent, mbStr);
+          } else {
+            onProgress(null, mbStr, receivedBytes);
+          }
         }
       }
 
