@@ -53,9 +53,9 @@ export default function MediaCard({ media, onDownload, onPreview, isPro, onOpenP
 
     let currentProg = 10;
     const progressInterval = setInterval(() => {
-      currentProg = Math.min(currentProg + Math.floor(Math.random() * 3) + 1, 88);
+      currentProg = Math.min(currentProg + Math.floor(Math.random() * 2) + 1, 98);
       setDownloadProgress(currentProg);
-    }, 400);
+    }, 300);
 
     try {
       const res = await onDownload(
@@ -72,11 +72,9 @@ export default function MediaCard({ media, onDownload, onPreview, isPro, onOpenP
         (realPercent, mbStr, bytes) => {
           if (mbStr) setStreamedSize(mbStr);
           if (realPercent !== null && realPercent !== undefined) {
-            clearInterval(progressInterval);
             setDownloadProgress(Math.max(realPercent, currentProg));
           } else if (bytes && bytes > 0) {
-            clearInterval(progressInterval);
-            const dynamicPercent = Math.min(96, Math.floor(10 + (bytes / (6 * 1024 * 1024)) * 86));
+            const dynamicPercent = Math.min(98, Math.floor(20 + (bytes / (3 * 1024 * 1024)) * 78));
             currentProg = Math.max(currentProg, dynamicPercent);
             setDownloadProgress(currentProg);
           }
