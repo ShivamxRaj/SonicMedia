@@ -23,6 +23,14 @@ app.use(express.json());
 const YTDLP_BIN = path.join(process.cwd(), 'server', process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
 const YTDLP_TMP = path.join(process.cwd(), 'server', process.platform === 'win32' ? 'yt-dlp.tmp.exe' : 'yt-dlp.tmp');
 const YTDLP_PKG = path.join(process.cwd(), 'server', 'yt_pkg');
+const COOKIES_FILE = path.join(process.cwd(), 'server', 'cookies.txt');
+
+function getCookieArgs() {
+  if (fs.existsSync(COOKIES_FILE) && fs.statSync(COOKIES_FILE).size > 20) {
+    return ['--cookies', COOKIES_FILE];
+  }
+  return [];
+}
 
 // Download & Auto-Update standalone yt-dlp binary atomically via GitHub releases
 function ensureYtDlpBinary(forceUpdate = false, callback = null) {
@@ -518,6 +526,7 @@ app.get('/api/debug', (req, res) => {
     '--geo-bypass-country', 'US',
     '--no-check-certificates',
     '--no-playlist',
+    ...getCookieArgs(),
     testUrl
   ];
 
@@ -597,6 +606,7 @@ app.get('/api/debug-g', (req, res) => {
     '--geo-bypass-country', 'US',
     '--no-check-certificates',
     '--no-playlist',
+    ...getCookieArgs(),
     testUrl
   ];
 
@@ -755,6 +765,7 @@ app.get('/api/info', async (req, res) => {
     '--ignore-no-formats-error',
     '--no-warnings',
     '--no-playlist',
+    ...getCookieArgs(),
     cleanUrl
   ];
 
@@ -965,6 +976,7 @@ app.get('/api/download', (req, res) => {
       '--geo-bypass-country', 'US',
       '--no-check-certificates',
       ...playlistHandlingArgs,
+      ...getCookieArgs(),
       targetDownloadUrl
     ];
 
@@ -1120,6 +1132,7 @@ app.get('/api/download', (req, res) => {
       '--no-part',
       '--force-overwrites',
       ...playlistHandlingArgs,
+      ...getCookieArgs(),
       '-o', tempFilePath
     ];
     if (hasFfmpeg) audioArgs.push('--ffmpeg-location', FFMPEG_BIN);
@@ -1231,6 +1244,7 @@ app.get('/api/download', (req, res) => {
     '--no-part',
     '--force-overwrites',
     ...playlistHandlingArgs,
+    ...getCookieArgs(),
     '-o', tempVideoPath
   ];
 
