@@ -8,6 +8,15 @@ import https from 'https';
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Process Crash Protection: Prevent server status 1 exit on background network timeouts
+process.on('uncaughtException', (err) => {
+  console.error('⚠️ [CRASH GUARD] Uncaught Exception:', err.message);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('⚠️ [CRASH GUARD] Unhandled Rejection:', reason);
+});
+
 app.use(cors());
 app.use(express.json());
 
