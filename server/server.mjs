@@ -85,20 +85,22 @@ setInterval(() => ensureYtDlpBinary(true), 24 * 60 * 60 * 1000);
 
 // Dynamically return valid yt-dlp commands that exist on the filesystem
 function getCommands() {
-  const homeBin = path.join(process.env.HOME || '/root', '.local', 'bin', 'yt-dlp');
-  const nodeModulesBin = path.join(process.cwd(), 'node_modules', 'yt-dlp-exec', 'bin', process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
+  const nodeDir = path.dirname(process.execPath);
+  const pathSep = process.platform === 'win32' ? ';' : ':';
+  const extendedPath = process.env.PATH ? `${nodeDir}${pathSep}${process.env.PATH}` : nodeDir;
 
   const envWithPkg = {
     ...process.env,
-    PYTHONPATH: fs.existsSync(YTDLP_PKG) ? `${YTDLP_PKG}:${process.env.PYTHONPATH || ''}` : process.env.PYTHONPATH
+    PATH: extendedPath,
+    PYTHONPATH: fs.existsSync(YTDLP_PKG) ? `${YTDLP_PKG}${pathSep}${process.env.PYTHONPATH || ''}` : process.env.PYTHONPATH
   };
 
   const candidates = [
-    { label: 'server-yt-dlp-bin', cmd: YTDLP_BIN, extraArgs: [], env: process.env },
+    { label: 'server-yt-dlp-bin', cmd: YTDLP_BIN, extraArgs: [], env: envWithPkg },
     { label: 'python3-ytpkg', cmd: 'python3', extraArgs: ['-m', 'yt_dlp'], env: envWithPkg },
     { label: 'python-ytpkg', cmd: 'python', extraArgs: ['-m', 'yt_dlp'], env: envWithPkg },
-    { label: 'node-modules-yt-dlp-exec', cmd: nodeModulesBin, extraArgs: [], env: process.env },
-    { label: 'home-local-bin', cmd: homeBin, extraArgs: [], env: process.env }
+    { label: 'node-modules-yt-dlp-exec', cmd: nodeModulesBin, extraArgs: [], env: envWithPkg },
+    { label: 'home-local-bin', cmd: homeBin, extraArgs: [], env: envWithPkg }
   ];
 
   return candidates.filter(c => {
@@ -504,9 +506,10 @@ app.get('/api/debug', (req, res) => {
     '-4',
     '-q',
     '--no-progress',
+    '--js-runtimes', 'node',
     '-o', '-',
     '-f', '251/140/ba/b/best',
-    '--extractor-args', 'youtube:player_client=ios,android',
+    '--extractor-args', 'youtube:player_client=android',
     '--geo-bypass',
     '--geo-bypass-country', 'US',
     '--no-check-certificates',
@@ -583,7 +586,8 @@ app.get('/api/debug-g', (req, res) => {
     '-4',
     '-g',
     '-f', '251/140/ba/b/best',
-    '--extractor-args', 'youtube:player_client=ios,android',
+    '--js-runtimes', 'node',
+    '--extractor-args', 'youtube:player_client=android',
     '--geo-bypass',
     '--geo-bypass-country', 'US',
     '--no-check-certificates',
@@ -737,7 +741,8 @@ app.get('/api/info', async (req, res) => {
   const infoArgs = [
     '-4',
     '--dump-single-json',
-    '--extractor-args', 'youtube:player_client=ios,android',
+    '--js-runtimes', 'node',
+    '--extractor-args', 'youtube:player_client=android',
     '--geo-bypass',
     '--geo-bypass-country', 'US',
     '--no-check-certificates',
@@ -947,7 +952,8 @@ app.get('/api/download', (req, res) => {
       '-4',
       '-g',
       '-f', '251/140/ba/b/best',
-      '--extractor-args', 'youtube:player_client=ios,android',
+      '--js-runtimes', 'node',
+      '--extractor-args', 'youtube:player_client=android',
       '--geo-bypass',
       '--geo-bypass-country', 'US',
       '--no-check-certificates',
@@ -1094,7 +1100,8 @@ app.get('/api/download', (req, res) => {
       '-4',
       '-q',
       '--no-progress',
-      '--extractor-args', 'youtube:player_client=ios,android',
+      '--js-runtimes', 'node',
+      '--extractor-args', 'youtube:player_client=android',
       '--geo-bypass',
       '--geo-bypass-country', 'US',
       '-x',
@@ -1203,7 +1210,8 @@ app.get('/api/download', (req, res) => {
     '-4',
     '-q',
     '--no-progress',
-    '--extractor-args', 'youtube:player_client=ios,android',
+    '--js-runtimes', 'node',
+    '--extractor-args', 'youtube:player_client=android',
     '--geo-bypass',
     '--geo-bypass-country', 'US',
     '-f', formatString,
