@@ -1135,7 +1135,7 @@ app.get('/api/download', (req, res) => {
         console.error(`❌ All audio extraction strategies failed for: ${cleanUrl}`);
         if (!res.headersSent) {
           res.setHeader('Content-Type', 'application/json');
-          res.status(500).json({ error: '❌ Audio extraction failed. YouTube link may be restricted or protected.' });
+          res.status(400).json({ error: '⚠️ YouTube restricted cloud IP downloads for this link. Please add YouTube Netscape cookies to server/cookies.txt.' });
         } else if (!res.writableEnded) {
           res.end();
         }
