@@ -505,8 +505,8 @@ app.get('/api/debug', (req, res) => {
     '--no-progress',
     '-o', '-',
     '-f', '18/b/best',
-    '--extractor-args', 'youtube:player_client=android',
-    '--user-agent', '',
+    '--extractor-args', 'youtube:player_client=android_vr,android',
+    '--user-agent', 'com.google.android.youtube/19.29.37 (Linux; U; Android 14)',
     '--no-check-certificates',
     '--no-playlist',
     testUrl
@@ -656,7 +656,8 @@ app.get('/api/info', async (req, res) => {
 
   const infoArgs = [
     '--dump-single-json',
-    '--extractor-args', 'youtube:player_client=android',
+    '--extractor-args', 'youtube:player_client=android_vr,android',
+    '--user-agent', 'com.google.android.youtube/19.29.37 (Linux; U; Android 14)',
     '--no-check-certificates',
     '--ignore-no-formats-error',
     '--no-warnings',
@@ -863,7 +864,8 @@ app.get('/api/download', (req, res) => {
     const getUrlArgs = [
       '-g',
       '-f', 'ba/b/best',
-      '--extractor-args', 'youtube:player_client=android',
+      '--extractor-args', 'youtube:player_client=android_vr,android',
+      '--user-agent', 'com.google.android.youtube/19.29.37 (Linux; U; Android 14)',
       '--no-check-certificates',
       ...playlistHandlingArgs,
       targetDownloadUrl
@@ -990,7 +992,8 @@ app.get('/api/download', (req, res) => {
     const audioArgs = [
       '-q',
       '--no-progress',
-      '--extractor-args', 'youtube:player_client=android',
+      '--extractor-args', 'youtube:player_client=android_vr,android',
+      '--user-agent', 'com.google.android.youtube/19.29.37 (Linux; U; Android 14)',
       '-x',
       '--audio-format', 'mp3',
       '--audio-quality', audioQualityArg,
@@ -1096,7 +1099,8 @@ app.get('/api/download', (req, res) => {
   const videoArgs = [
     '-q',
     '--no-progress',
-    '--extractor-args', 'youtube:player_client=android',
+    '--extractor-args', 'youtube:player_client=android_vr,android',
+    '--user-agent', 'com.google.android.youtube/19.29.37 (Linux; U; Android 14)',
     '-f', formatString,
     '--merge-output-format', 'mp4',
     '--concurrent-fragments', '5',
