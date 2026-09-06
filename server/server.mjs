@@ -497,6 +497,7 @@ app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
     binary: fs.existsSync(YTDLP_BIN) ? 'active' : 'downloading',
+    cookies: fs.existsSync(COOKIES_FILE) && fs.statSync(COOKIES_FILE).size > 50 ? `active (${fs.statSync(COOKIES_FILE).size} bytes)` : 'inactive',
     telegram: TELEGRAM_BOT_TOKEN ? 'configured' : 'not_configured',
     bot_name: '@sonic_media_pro_bot',
     chat_id: TELEGRAM_CHAT_ID,
