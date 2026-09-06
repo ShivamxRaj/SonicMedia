@@ -85,6 +85,9 @@ setInterval(() => ensureYtDlpBinary(true), 24 * 60 * 60 * 1000);
 
 // Dynamically return valid yt-dlp commands that exist on the filesystem
 function getCommands() {
+  const homeBin = path.join(process.env.HOME || '/root', '.local', 'bin', 'yt-dlp');
+  const nodeModulesBin = path.join(process.cwd(), 'node_modules', 'yt-dlp-exec', 'bin', process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
+
   const nodeDir = path.dirname(process.execPath);
   const pathSep = process.platform === 'win32' ? ';' : ':';
   const extendedPath = process.env.PATH ? `${nodeDir}${pathSep}${process.env.PATH}` : nodeDir;
