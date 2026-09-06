@@ -38,33 +38,35 @@ export default function MediaCard({ media, onDownload, onPreview, isPro, onOpenP
     }
   };
 
-  const handleDownloadClick = () => {
+  const handleDownloadClick = async () => {
+    if (isDownloading) return;
     if (currentFormat.isProOnly && !isPro) {
       onOpenProModal();
       return;
     }
 
     setIsDownloading(true);
-    setDownloadProgress(100);
     setDownloadSuccess(false);
 
-    // ⚡ Instant native download trigger!
-    onDownload({
-      url: media.url,
-      type: activeTab,
-      quality: selectedQuality,
-      speed: activeTab === 'audio' ? (audioSettings.speed || '1.0x') : '1.0x',
-      title: audioSettings.customTitle || media.title,
-      uploader: audioSettings.customArtist || media.uploader,
-      formatLabel: currentFormat.label,
-      audioSettings: activeTab === 'audio' ? audioSettings : null
-    });
+    try {
+      const res = await onDownload({
+        url: media.url,
+        type: activeTab,
+        quality: selectedQuality,
+        speed: activeTab === 'audio' ? (audioSettings.speed || '1.0x') : '1.0x',
+        title: audioSettings.customTitle || media.title,
+        uploader: audioSettings.customArtist || media.uploader,
+        formatLabel: currentFormat.label,
+        audioSettings: activeTab === 'audio' ? audioSettings : null
+      });
 
-    setTimeout(() => {
+      if (res !== false) {
+        setDownloadSuccess(true);
+        setTimeout(() => setDownloadSuccess(false), 5000);
+      }
+    } finally {
       setIsDownloading(false);
-      setDownloadSuccess(true);
-      setTimeout(() => setDownloadSuccess(false), 4000);
-    }, 400);
+    }
   };
 
   return (
@@ -368,13 +370,23 @@ export default function MediaCard({ media, onDownload, onPreview, isPro, onOpenP
             ) : (
               <button
                 onClick={handleDownloadClick}
+                disabled={isDownloading}
                 className="btn-primary"
-                style={{ width: '100%', padding: '14px', fontSize: '1rem' }}
+                style={{ width: '100%', padding: '14px', fontSize: '1rem', opacity: isDownloading ? 0.75 : 1, cursor: isDownloading ? 'wait' : 'pointer' }}
               >
-                <Download size={20} />
-                <span>
-                  Download {activeTab === 'audio' ? 'MP3 Audio' : 'MP4 Video'} ({selectedQuality === '2160p' || selectedQuality === 'mp4-4k' ? '4K HDR Remaster' : currentFormat.label.split(' ')[1] || 'HD'})
-                </span>
+                {isDownloading ? (
+                  <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
+                    <span style={{ width: '18px', height: '18px', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                    <span>Processing & Downloading {activeTab === 'audio' ? 'MP3' : 'MP4'} (Please wait)...</span>
+                  </span>
+                ) : (
+                  <>
+                    <Download size={20} />
+                    <span>
+                      Download {activeTab === 'audio' ? 'MP3 Audio' : 'MP4 Video'} ({selectedQuality === '2160p' || selectedQuality === 'mp4-4k' ? '4K HDR Remaster' : currentFormat.label.split(' ')[1] || 'HD'})
+                    </span>
+                  </>
+                )}
               </button>
             )}
 
