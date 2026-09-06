@@ -38,11 +38,7 @@ function getCookieArgs() {
 }
 
 function getExtractorArgs() {
-  const hasCookies = getCookieArgs().length > 0;
-  if (hasCookies) {
-    return [];
-  }
-  return ['--extractor-args', 'youtube:player_client=android'];
+  return ['--extractor-args', 'youtube:player_client=android,android_vr,mweb,web'];
 }
 
 // Download & Auto-Update standalone yt-dlp binary atomically via GitHub releases
