@@ -814,6 +814,9 @@ app.get('/api/download', (req, res) => {
   const commands = getCommands();
   const FFMPEG_BIN = path.join(process.cwd(), 'node_modules', 'ffmpeg-static', process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg');
   const hasFfmpeg = fs.existsSync(FFMPEG_BIN);
+  if (hasFfmpeg && process.platform !== 'win32') {
+    try { fs.chmodSync(FFMPEG_BIN, 0o755); } catch (e) {}
+  }
 
   const qLower = (quality || '').toLowerCase();
 
@@ -845,11 +848,11 @@ app.get('/api/download', (req, res) => {
     const audioArgs = [
       '-q',
       '--no-progress',
-      '--js-runtimes', 'node',
+      '--js-runtimes', `node:${process.execPath}`,
       '-x',
       '--audio-format', 'mp3',
       '--audio-quality', audioQualityArg,
-      '--extractor-args', 'youtube:player_client=android,web,ios',
+      '--extractor-args', 'youtube:player_client=android,web,ios,mweb,tv_embedded',
       '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
       '--no-check-certificates',
       '--no-part',
@@ -939,9 +942,10 @@ app.get('/api/download', (req, res) => {
   const videoArgs = [
     '-q',
     '--no-progress',
-    '--js-runtimes', 'node',
+    '--js-runtimes', `node:${process.execPath}`,
     '-f', formatString,
     '--merge-output-format', 'mp4',
+    '--extractor-args', 'youtube:player_client=android,web,ios,mweb,tv_embedded',
     '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     '--no-check-certificates',
     '--ignore-no-formats-error',
