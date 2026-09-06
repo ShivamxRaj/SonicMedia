@@ -656,7 +656,7 @@ app.get('/api/info', async (req, res) => {
 
   const infoArgs = [
     '--dump-single-json',
-    '--user-agent', '',
+    '--extractor-args', 'youtube:player_client=android',
     '--no-check-certificates',
     '--ignore-no-formats-error',
     '--no-warnings',
@@ -863,8 +863,7 @@ app.get('/api/download', (req, res) => {
     const getUrlArgs = [
       '-g',
       '-f', 'ba/b/best',
-      '--js-runtimes', 'node',
-      '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      '--extractor-args', 'youtube:player_client=android',
       '--no-check-certificates',
       ...playlistHandlingArgs,
       targetDownloadUrl
@@ -991,12 +990,11 @@ app.get('/api/download', (req, res) => {
     const audioArgs = [
       '-q',
       '--no-progress',
-      '--js-runtimes', 'node',
+      '--extractor-args', 'youtube:player_client=android',
       '-x',
       '--audio-format', 'mp3',
       '--audio-quality', audioQualityArg,
       '--concurrent-fragments', '5',
-      '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
       '--no-check-certificates',
       '--no-part',
       '--force-overwrites',
@@ -1098,11 +1096,10 @@ app.get('/api/download', (req, res) => {
   const videoArgs = [
     '-q',
     '--no-progress',
-    '--js-runtimes', 'node',
+    '--extractor-args', 'youtube:player_client=android',
     '-f', formatString,
     '--merge-output-format', 'mp4',
     '--concurrent-fragments', '5',
-    '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     '--no-check-certificates',
     '--ignore-no-formats-error',
     '--no-part',
