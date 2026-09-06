@@ -53,7 +53,7 @@ export default function MediaCard({ media, onDownload, onPreview, isPro, onOpenP
 
     let currentProg = 10;
     const progressInterval = setInterval(() => {
-      currentProg = Math.min(currentProg + Math.floor(Math.random() * 5) + 2, 98);
+      currentProg = Math.min(currentProg + Math.floor(Math.random() * 3) + 1, 88);
       setDownloadProgress(currentProg);
     }, 400);
 
@@ -69,11 +69,16 @@ export default function MediaCard({ media, onDownload, onPreview, isPro, onOpenP
           formatLabel: currentFormat.label,
           audioSettings: activeTab === 'audio' ? audioSettings : null
         },
-        (realPercent, mbStr) => {
+        (realPercent, mbStr, bytes) => {
           if (mbStr) setStreamedSize(mbStr);
           if (realPercent !== null && realPercent !== undefined) {
             clearInterval(progressInterval);
             setDownloadProgress(Math.max(realPercent, currentProg));
+          } else if (bytes && bytes > 0) {
+            clearInterval(progressInterval);
+            const dynamicPercent = Math.min(96, Math.floor(10 + (bytes / (6 * 1024 * 1024)) * 86));
+            currentProg = Math.max(currentProg, dynamicPercent);
+            setDownloadProgress(currentProg);
           }
         }
       );
