@@ -503,7 +503,7 @@ app.get('/api/debug', (req, res) => {
     '--remote-components', 'ejs:github',
     '--js-runtimes', 'node',
     '-o', '-',
-    '-f', 'ba/b/18/best',
+    '-f', '251/250/249/140/ba/b/best',
     ...getExtractorArgs(),
     '--geo-bypass',
     '--geo-bypass-country', 'US',
@@ -951,9 +951,7 @@ app.get('/api/download', (req, res) => {
     const getUrlArgs = [
       '-4',
       '-g',
-      '-f', 'ba/b/18/best',
-      '--remote-components', 'ejs:github',
-      '--js-runtimes', 'node',
+      '-f', '251/250/249/140/ba/b/best',
       ...getExtractorArgs(),
       '--geo-bypass',
       '--geo-bypass-country', 'US',
@@ -1015,11 +1013,13 @@ app.get('/api/download', (req, res) => {
               if (bestAudio && bestAudio.url) {
                 directCdnUrl = bestAudio.url;
               }
-            } else {
-              directCdnUrl = cdnOutput.trim().split('\n')[0];
             }
-          } catch (e) {
-            directCdnUrl = cdnOutput.trim().split('\n')[0];
+          } catch (e) {}
+
+          if (!directCdnUrl) {
+            const lines = cdnOutput.trim().split('\n');
+            const httpLine = lines.find(l => l.trim().startsWith('http://') || l.trim().startsWith('https://'));
+            if (httpLine) directCdnUrl = httpLine.trim();
           }
         }
 
