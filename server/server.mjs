@@ -904,14 +904,13 @@ app.get('/api/download', (req, res) => {
         if (code === 0 && directCdnUrl && directCdnUrl.startsWith('http')) {
           console.log(`[tryCdnPipe ${label}] ✅ Direct CDN stream URL obtained in 2s! Streaming MP3 directly to client...`);
 
-          if (!res.headersSent) {
-            res.setHeader('Content-Type', 'audio/mpeg');
-            res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
-            res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, X-Filename');
-            res.setHeader('X-Filename', encodeURIComponent(filename));
-          }
-
-          let ffmpegArgs = ['-y', '-i', directCdnUrl, '-vn', '-acodec', 'libmp3lame'];
+          let ffmpegArgs = [
+            '-y',
+            '-user_agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            '-i', directCdnUrl,
+            '-vn',
+            '-acodec', 'libmp3lame'
+          ];
           if (audioQualityArg === '0') ffmpegArgs.push('-q:a', '0');
           else if (audioQualityArg === '5') ffmpegArgs.push('-q:a', '5');
           else ffmpegArgs.push('-q:a', '2');
@@ -928,12 +927,34 @@ app.get('/api/download', (req, res) => {
             return tryAudioConvertTemp(0);
           }
 
+          let bytesWritten = 0;
+          let headersSentLocal = false;
+
+          ff.stdout.on('data', (chunk) => {
+            if (!headersSentLocal && !res.headersSent) {
+              headersSentLocal = true;
+              res.setHeader('Content-Type', 'audio/mpeg');
+              res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
+              res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, X-Filename');
+              res.setHeader('X-Filename', encodeURIComponent(filename));
+            }
+            bytesWritten += chunk.length;
+            res.write(chunk);
+          });
+
+          ff.stdout.on('end', () => {
+            if (bytesWritten === 0) {
+              console.error(`[tryCdnPipe ${label}] FFmpeg stdout ended with 0 bytes. Falling back to temp file...`);
+              if (!res.headersSent) tryAudioConvertTemp(0);
+            } else {
+              res.end();
+            }
+          });
+
           ff.on('error', (err) => {
             console.error('[ffmpeg process error]:', err.message);
             if (!res.headersSent) tryAudioConvertTemp(0);
           });
-
-          ff.stdout.pipe(res);
 
           req.on('close', () => {
             try { ff.kill('SIGKILL'); } catch (e) {}
