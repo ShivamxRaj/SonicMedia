@@ -846,13 +846,89 @@ app.get('/api/download', (req, res) => {
       afFilter = 'atempo=1.5';
     }
 
+    const playlistHandlingArgs = isPurePlaylist ? ['--playlist-items', '1'] : ['--no-playlist'];
+
+    // ⚡ INSTANT DIRECT CDN FFMPEG PIPE ENGINE (0-Second Latency Header Response)
+    const getUrlArgs = [
+      '-g',
+      '-f', 'ba/b/best',
+      '--js-runtimes', `node:${process.execPath}`,
+      '--extractor-args', 'youtube:player_client=android,web,ios,mweb,tv_embedded',
+      '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      '--no-check-certificates',
+      ...playlistHandlingArgs,
+      targetDownloadUrl
+    ];
+
+    function tryCdnPipe(index) {
+      if (index >= commands.length) {
+        return tryAudioConvertTemp(0);
+      }
+
+      const { cmd, extraArgs, label, env } = commands[index];
+      let ytdlp;
+      try {
+        ytdlp = spawn(cmd, [...extraArgs, ...getUrlArgs], { env: env || process.env });
+      } catch (e) {
+        return tryCdnPipe(index + 1);
+      }
+
+      let cdnOutput = '';
+      ytdlp.stdout.on('data', d => cdnOutput += d.toString());
+
+      const timer = setTimeout(() => {
+        try { ytdlp.kill('SIGKILL'); } catch (e) {}
+      }, 15000);
+
+      ytdlp.on('close', (code) => {
+        clearTimeout(timer);
+        const directCdnUrl = cdnOutput.trim().split('\n')[0];
+        if (directCdnUrl && directCdnUrl.startsWith('http')) {
+          console.log(`[tryCdnPipe ${label}] ✅ Direct CDN stream URL obtained in 2s! Streaming MP3 directly to client...`);
+
+          if (!res.headersSent) {
+            res.setHeader('Content-Type', 'audio/mpeg');
+            res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
+            res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, X-Filename');
+            res.setHeader('X-Filename', encodeURIComponent(filename));
+          }
+
+          let ffmpegArgs = ['-y', '-i', directCdnUrl, '-vn', '-acodec', 'libmp3lame'];
+          if (audioQualityArg === '0') ffmpegArgs.push('-q:a', '0');
+          else if (audioQualityArg === '5') ffmpegArgs.push('-q:a', '5');
+          else ffmpegArgs.push('-q:a', '2');
+
+          if (afFilter) ffmpegArgs.push('-af', afFilter);
+          ffmpegArgs.push('-f', 'mp3', 'pipe:1');
+
+          const ffmpegCmd = hasFfmpeg ? FFMPEG_BIN : 'ffmpeg';
+          let ff;
+          try {
+            ff = spawn(ffmpegCmd, ffmpegArgs);
+          } catch (e) {
+            return tryAudioConvertTemp(0);
+          }
+
+          ff.stdout.pipe(res);
+
+          req.on('close', () => {
+            try { ff.kill('SIGKILL'); } catch (e) {}
+          });
+        } else {
+          tryCdnPipe(index + 1);
+        }
+      });
+
+      req.on('close', () => {
+        try { ytdlp.kill('SIGKILL'); } catch (e) {}
+      });
+    }
+
     const tempDir = path.join(process.cwd(), 'server', 'temp');
     if (!fs.existsSync(tempDir)) {
       try { fs.mkdirSync(tempDir, { recursive: true }); } catch (e) {}
     }
     const tempFilePath = path.join(tempDir, `audio_${Date.now()}_${Math.random().toString(36).substring(7)}.mp3`);
-
-    const playlistHandlingArgs = isPurePlaylist ? ['--playlist-items', '1'] : ['--no-playlist'];
 
     const audioArgs = [
       '-q',
@@ -874,7 +950,7 @@ app.get('/api/download', (req, res) => {
     if (afFilter && hasFfmpeg) audioArgs.push('--postprocessor-args', `ffmpeg:-af "${afFilter}"`);
     audioArgs.push(targetDownloadUrl);
 
-    function tryAudioConvert(index) {
+    function tryAudioConvertTemp(index) {
       if (index >= commands.length) {
         console.error(`❌ All audio extraction strategies failed for: ${cleanUrl}`);
         if (!res.headersSent) {
@@ -891,13 +967,13 @@ app.get('/api/download', (req, res) => {
       try {
         child = spawn(cmd, [...extraArgs, ...audioArgs], { env: env || process.env });
       } catch (e) {
-        return tryAudioConvert(index + 1);
+        return tryAudioConvertTemp(index + 1);
       }
 
       child.on('close', (code) => {
         if (fs.existsSync(tempFilePath) && fs.statSync(tempFilePath).size > 5000) {
           const stat = fs.statSync(tempFilePath);
-          console.log(`[tryAudioConvert ${label}] ✅ MP3 file ready (${(stat.size / 1024 / 1024).toFixed(2)} MB), streaming to browser...`);
+          console.log(`[tryAudioConvertTemp ${label}] ✅ MP3 file ready (${(stat.size / 1024 / 1024).toFixed(2)} MB), streaming to browser...`);
 
           if (!res.headersSent) {
             res.setHeader('Content-Type', 'audio/mpeg');
@@ -914,7 +990,7 @@ app.get('/api/download', (req, res) => {
           res.on('finish', cleanup);
           res.on('close', cleanup);
         } else {
-          tryAudioConvert(index + 1);
+          tryAudioConvertTemp(index + 1);
         }
       });
 
@@ -923,7 +999,7 @@ app.get('/api/download', (req, res) => {
       });
     }
 
-    return tryAudioConvert(0);
+    return tryCdnPipe(0);
   }
 
   // 🎬 Video Processing Engine with Valid MP4 Container & Faststart Header
