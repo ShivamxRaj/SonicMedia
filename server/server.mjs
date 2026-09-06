@@ -1005,10 +1005,10 @@ app.get('/api/download', (req, res) => {
         if (!handled) {
           handled = true;
           try { ytdlp.kill('SIGKILL'); } catch (e) {}
-          console.error(`[tryCdnPipe ${label}] timed out after 6s, trying next strategy...`);
+          console.error(`[tryCdnPipe ${label}] timed out after 15s, trying next strategy...`);
           tryCdnPipe(index + 1);
         }
-      }, 6000);
+      }, 15000);
 
       ytdlp.on('error', (err) => {
         if (!handled) {
@@ -1171,10 +1171,10 @@ app.get('/api/download', (req, res) => {
         if (!handled) {
           handled = true;
           try { child.kill('SIGKILL'); } catch (e) {}
-          console.error(`[tryAudioConvertTemp ${label}] timed out after 10s, trying next strategy...`);
+          console.error(`[tryAudioConvertTemp ${label}] timed out after 30s, trying next strategy...`);
           tryAudioConvertTemp(index + 1);
         }
-      }, 10000);
+      }, 30000);
 
       child.on('error', (err) => {
         if (!handled) {
