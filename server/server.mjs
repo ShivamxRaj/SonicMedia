@@ -26,9 +26,14 @@ const YTDLP_PKG = path.join(process.cwd(), 'server', 'yt_pkg');
 const COOKIES_FILE = path.join(process.cwd(), 'server', 'cookies.txt');
 
 function getCookieArgs() {
-  if (fs.existsSync(COOKIES_FILE) && fs.statSync(COOKIES_FILE).size > 20) {
-    return ['--cookies', COOKIES_FILE];
-  }
+  try {
+    if (fs.existsSync(COOKIES_FILE) && fs.statSync(COOKIES_FILE).size > 50) {
+      const content = fs.readFileSync(COOKIES_FILE, 'utf8');
+      if (content.includes('youtube.com') || content.includes('google.com') || content.includes('LOGIN_INFO') || content.includes('VISITOR_INFO1_LIVE')) {
+        return ['--cookies', COOKIES_FILE];
+      }
+    }
+  } catch (e) {}
   return [];
 }
 
@@ -108,22 +113,13 @@ function getCommands() {
 
   const candidates = [
     { label: 'server-yt-dlp-bin', cmd: YTDLP_BIN, extraArgs: [], env: envWithPkg },
-    { label: 'python3-ytpkg', cmd: 'python3', extraArgs: ['-m', 'yt_dlp'], env: envWithPkg },
-    { label: 'python-ytpkg', cmd: 'python', extraArgs: ['-m', 'yt_dlp'], env: envWithPkg },
-    { label: 'node-modules-yt-dlp-exec', cmd: nodeModulesBin, extraArgs: [], env: envWithPkg },
-    { label: 'home-local-bin', cmd: homeBin, extraArgs: [], env: envWithPkg }
+    { label: 'python3-ytpkg', cmd: 'python3', extraArgs: ['-m', 'yt_dlp'], env: envWithPkg }
   ];
 
   return candidates.filter(c => {
     if (path.isAbsolute(c.cmd)) {
       try {
-        if (fs.existsSync(c.cmd) && fs.statSync(c.cmd).size > 1000000) {
-          if (process.platform !== 'win32') {
-            try { fs.chmodSync(c.cmd, 0o755); } catch (e) {}
-          }
-          return true;
-        }
-        return false;
+        return fs.existsSync(c.cmd) && fs.statSync(c.cmd).size > 1000000;
       } catch (e) {
         return false;
       }
@@ -1000,10 +996,10 @@ app.get('/api/download', (req, res) => {
         if (!handled) {
           handled = true;
           try { ytdlp.kill('SIGKILL'); } catch (e) {}
-          console.error(`[tryCdnPipe ${label}] timed out after 25s, trying next strategy...`);
+          console.error(`[tryCdnPipe ${label}] timed out after 6s, trying next strategy...`);
           tryCdnPipe(index + 1);
         }
-      }, 25000);
+      }, 6000);
 
       ytdlp.on('error', (err) => {
         if (!handled) {
@@ -1161,9 +1157,19 @@ app.get('/api/download', (req, res) => {
         return tryAudioConvertTemp(index + 1);
       }
 
+      const timer = setTimeout(() => {
+        if (!handled) {
+          handled = true;
+          try { child.kill('SIGKILL'); } catch (e) {}
+          console.error(`[tryAudioConvertTemp ${label}] timed out after 10s, trying next strategy...`);
+          tryAudioConvertTemp(index + 1);
+        }
+      }, 10000);
+
       child.on('error', (err) => {
         if (!handled) {
           handled = true;
+          clearTimeout(timer);
           console.error(`[tryAudioConvertTemp ${label}] process error:`, err.message);
           tryAudioConvertTemp(index + 1);
         }
@@ -1172,6 +1178,7 @@ app.get('/api/download', (req, res) => {
       child.on('close', (code) => {
         if (handled) return;
         handled = true;
+        clearTimeout(timer);
 
         if (fs.existsSync(tempFilePath) && fs.statSync(tempFilePath).size > 5000) {
           const stat = fs.statSync(tempFilePath);
