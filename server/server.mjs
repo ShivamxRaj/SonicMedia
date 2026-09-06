@@ -514,12 +514,22 @@ app.get('/api/debug', (req, res) => {
 
   commands.forEach(({ label, cmd, extraArgs, env }) => {
     let py;
+    let handled = false;
+
+    const done = () => {
+      if (handled) return;
+      handled = true;
+      completed++;
+      if (completed === commands.length && !res.headersSent) {
+        res.json({ testUrl, commands: results });
+      }
+    };
+
     try {
       py = spawn(cmd, [...extraArgs, ...testPipeArgs], { env: env || process.env });
     } catch (e) {
       results.push({ label, cmd, status: 'spawn_error', error: e.message });
-      completed++;
-      if (completed === commands.length) res.json({ testUrl, commands: results });
+      done();
       return;
     }
 
@@ -538,8 +548,7 @@ app.get('/api/debug', (req, res) => {
 
     py.on('error', (e) => {
       results.push({ label, cmd, status: 'error', error: e.message });
-      completed++;
-      if (completed === commands.length) res.json({ testUrl, commands: results });
+      done();
     });
 
     py.on('close', (code) => {
@@ -552,8 +561,7 @@ app.get('/api/debug', (req, res) => {
         first4BytesHex,
         stderr: stderr.slice(-300)
       });
-      completed++;
-      if (completed === commands.length) res.json({ testUrl, commands: results });
+      done();
     });
   });
 });
@@ -581,12 +589,22 @@ app.get('/api/debug-g', (req, res) => {
 
   commands.forEach(({ label, cmd, extraArgs, env }) => {
     let py;
+    let handled = false;
+
+    const done = () => {
+      if (handled) return;
+      handled = true;
+      completed++;
+      if (completed === commands.length && !res.headersSent) {
+        res.json({ testUrl, commands: results });
+      }
+    };
+
     try {
       py = spawn(cmd, [...extraArgs, ...testGArgs], { env: env || process.env });
     } catch (e) {
       results.push({ label, cmd, status: 'spawn_error', error: e.message });
-      completed++;
-      if (completed === commands.length) res.json({ testUrl, commands: results });
+      done();
       return;
     }
 
@@ -598,8 +616,7 @@ app.get('/api/debug-g', (req, res) => {
 
     py.on('error', (e) => {
       results.push({ label, cmd, status: 'error', error: e.message });
-      completed++;
-      if (completed === commands.length) res.json({ testUrl, commands: results });
+      done();
     });
 
     py.on('close', (code) => {
@@ -612,8 +629,7 @@ app.get('/api/debug-g', (req, res) => {
         url: url.slice(0, 100),
         stderr: stderr.slice(-300)
       });
-      completed++;
-      if (completed === commands.length) res.json({ testUrl, commands: results });
+      done();
     });
   });
 });
