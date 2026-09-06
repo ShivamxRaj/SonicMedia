@@ -860,7 +860,8 @@ app.get('/api/download', (req, res) => {
 
     // ⚡ INSTANT DIRECT CDN FFMPEG PIPE ENGINE (0-Second Latency Header Response)
     const getUrlArgs = [
-      '--dump-single-json',
+      '-g',
+      '-f', '251/140/ba/b/best',
       '--extractor-args', 'youtube:player_client=android',
       '--no-check-certificates',
       ...playlistHandlingArgs,
@@ -887,10 +888,10 @@ app.get('/api/download', (req, res) => {
         if (!handled) {
           handled = true;
           try { ytdlp.kill('SIGKILL'); } catch (e) {}
-          console.error(`[tryCdnPipe ${label}] timed out after 8s, trying next strategy...`);
+          console.error(`[tryCdnPipe ${label}] timed out after 25s, trying next strategy...`);
           tryCdnPipe(index + 1);
         }
-      }, 8000);
+      }, 25000);
 
       ytdlp.on('error', (err) => {
         if (!handled) {
