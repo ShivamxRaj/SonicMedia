@@ -107,21 +107,11 @@ function getCommands() {
     PYTHONPATH: fs.existsSync(YTDLP_PKG) ? `${YTDLP_PKG}${pathSep}${process.env.PYTHONPATH || ''}` : process.env.PYTHONPATH
   };
 
-  const candidates = [
-    { label: 'server-yt-dlp-bin', cmd: YTDLP_BIN, extraArgs: [], env: envWithPkg },
-    { label: 'python3-ytpkg', cmd: 'python3', extraArgs: ['-m', 'yt_dlp'], env: envWithPkg }
-  ];
+  if (fs.existsSync(YTDLP_BIN) && fs.statSync(YTDLP_BIN).size > 1000000) {
+    return [{ label: 'server-yt-dlp-bin', cmd: YTDLP_BIN, extraArgs: [], env: envWithPkg }];
+  }
 
-  return candidates.filter(c => {
-    if (path.isAbsolute(c.cmd)) {
-      try {
-        return fs.existsSync(c.cmd) && fs.statSync(c.cmd).size > 1000000;
-      } catch (e) {
-        return false;
-      }
-    }
-    return true;
-  });
+  return [{ label: 'python3-ytpkg', cmd: 'python3', extraArgs: ['-m', 'yt_dlp'], env: envWithPkg }];
 }
 
 // Dynamic Sitemap.xml endpoint for Googlebot Indexer
