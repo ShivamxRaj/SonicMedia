@@ -97,7 +97,6 @@ function getCommands() {
     { label: 'server-yt-dlp-bin', cmd: YTDLP_BIN, extraArgs: [], env: process.env },
     { label: 'python3-ytpkg', cmd: 'python3', extraArgs: ['-m', 'yt_dlp'], env: envWithPkg },
     { label: 'python-ytpkg', cmd: 'python', extraArgs: ['-m', 'yt_dlp'], env: envWithPkg },
-    { label: 'global-yt-dlp', cmd: 'yt-dlp', extraArgs: [], env: process.env },
     { label: 'node-modules-yt-dlp-exec', cmd: nodeModulesBin, extraArgs: [], env: process.env },
     { label: 'home-local-bin', cmd: homeBin, extraArgs: [], env: process.env }
   ];
@@ -867,23 +866,43 @@ app.get('/api/download', (req, res) => {
 
       const { cmd, extraArgs, label, env } = commands[index];
       let ytdlp;
+      let handled = false;
+
       try {
         ytdlp = spawn(cmd, [...extraArgs, ...getUrlArgs], { env: env || process.env });
       } catch (e) {
+        console.error(`[tryCdnPipe ${label}] spawn catch error:`, e.message);
         return tryCdnPipe(index + 1);
       }
+
+      const timer = setTimeout(() => {
+        if (!handled) {
+          handled = true;
+          try { ytdlp.kill('SIGKILL'); } catch (e) {}
+          console.error(`[tryCdnPipe ${label}] timed out after 15s, trying next strategy...`);
+          tryCdnPipe(index + 1);
+        }
+      }, 15000);
+
+      ytdlp.on('error', (err) => {
+        if (!handled) {
+          handled = true;
+          clearTimeout(timer);
+          console.error(`[tryCdnPipe ${label}] process error:`, err.message);
+          tryCdnPipe(index + 1);
+        }
+      });
 
       let cdnOutput = '';
       ytdlp.stdout.on('data', d => cdnOutput += d.toString());
 
-      const timer = setTimeout(() => {
-        try { ytdlp.kill('SIGKILL'); } catch (e) {}
-      }, 15000);
-
       ytdlp.on('close', (code) => {
+        if (handled) return;
+        handled = true;
         clearTimeout(timer);
+
         const directCdnUrl = cdnOutput.trim().split('\n')[0];
-        if (directCdnUrl && directCdnUrl.startsWith('http')) {
+        if (code === 0 && directCdnUrl && directCdnUrl.startsWith('http')) {
           console.log(`[tryCdnPipe ${label}] ✅ Direct CDN stream URL obtained in 2s! Streaming MP3 directly to client...`);
 
           if (!res.headersSent) {
@@ -906,8 +925,14 @@ app.get('/api/download', (req, res) => {
           try {
             ff = spawn(ffmpegCmd, ffmpegArgs);
           } catch (e) {
+            console.error('[ffmpeg spawn error]:', e.message);
             return tryAudioConvertTemp(0);
           }
+
+          ff.on('error', (err) => {
+            console.error('[ffmpeg process error]:', err.message);
+            if (!res.headersSent) tryAudioConvertTemp(0);
+          });
 
           ff.stdout.pipe(res);
 
@@ -915,6 +940,7 @@ app.get('/api/download', (req, res) => {
             try { ff.kill('SIGKILL'); } catch (e) {}
           });
         } else {
+          console.error(`[tryCdnPipe ${label}] failed (code ${code}), trying fallback...`);
           tryCdnPipe(index + 1);
         }
       });
@@ -939,7 +965,7 @@ app.get('/api/download', (req, res) => {
       '--audio-quality', audioQualityArg,
       '--concurrent-fragments', '5',
       '--extractor-args', 'youtube:player_client=android,web,ios,mweb,tv_embedded',
-      '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      '--user-agent', 'Mozilla/5.0 (Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
       '--no-check-certificates',
       '--no-part',
       '--force-overwrites',
@@ -964,13 +990,26 @@ app.get('/api/download', (req, res) => {
 
       const { cmd, extraArgs, label, env } = commands[index];
       let child;
+      let handled = false;
       try {
         child = spawn(cmd, [...extraArgs, ...audioArgs], { env: env || process.env });
       } catch (e) {
+        console.error(`[tryAudioConvertTemp ${label}] spawn catch error:`, e.message);
         return tryAudioConvertTemp(index + 1);
       }
 
+      child.on('error', (err) => {
+        if (!handled) {
+          handled = true;
+          console.error(`[tryAudioConvertTemp ${label}] process error:`, err.message);
+          tryAudioConvertTemp(index + 1);
+        }
+      });
+
       child.on('close', (code) => {
+        if (handled) return;
+        handled = true;
+
         if (fs.existsSync(tempFilePath) && fs.statSync(tempFilePath).size > 5000) {
           const stat = fs.statSync(tempFilePath);
           console.log(`[tryAudioConvertTemp ${label}] ✅ MP3 file ready (${(stat.size / 1024 / 1024).toFixed(2)} MB), streaming to browser...`);
@@ -1062,14 +1101,26 @@ app.get('/api/download', (req, res) => {
 
     const { cmd, extraArgs, label, env } = commands[index];
     let child;
+    let handled = false;
 
     try {
       child = spawn(cmd, [...extraArgs, ...videoArgs], { env: env || process.env });
     } catch (e) {
+      console.error(`[tryVideoConvert ${label}] spawn catch error:`, e.message);
       return tryVideoConvert(index + 1);
     }
 
+    child.on('error', (err) => {
+      if (!handled) {
+        handled = true;
+        console.error(`[tryVideoConvert ${label}] process error:`, err.message);
+        tryVideoConvert(index + 1);
+      }
+    });
+
     child.on('close', (exitCode) => {
+      if (handled) return;
+      handled = true;
       if (fs.existsSync(tempVideoPath) && fs.statSync(tempVideoPath).size > 10000) {
         const stat = fs.statSync(tempVideoPath);
         console.log(`[tryVideoConvert ${label}] ✅ MP4 video merged successfully (${(stat.size / 1024 / 1024).toFixed(2)} MB), streaming to browser...`);
