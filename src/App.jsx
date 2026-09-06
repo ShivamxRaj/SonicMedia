@@ -123,35 +123,60 @@ export default function App() {
     }
   };
 
-  // Trigger Native Browser File Download Engine (Chrome / Firefox / Safari native download bar)
-  const handleDownload = (item) => {
+  // Safe Browser File Download Engine with content-type & status validation
+  const handleDownload = async (item) => {
     const speedParam = item.speed ? `&speed=${encodeURIComponent(item.speed)}` : '';
     const downloadTarget = item.download_url || `/api/download?url=${encodeURIComponent(item.url)}&type=${item.type}&quality=${item.quality}${speedParam}&title=${encodeURIComponent(item.title)}`;
     
-    // Direct native browser link trigger for native browser download manager
-    const link = document.createElement('a');
-    link.href = downloadTarget;
-    const safeTitle = (item.title || 'sonicmedia-download').replace(/[^a-zA-Z0-9_\-\s.]/g, '_').replace(/\s+/g, ' ').trim();
-    const ext = item.type === 'audio' ? 'mp3' : 'mp4';
-    link.setAttribute('download', `${safeTitle}.${ext}`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    try {
+      const res = await fetch(downloadTarget);
+      const contentType = res.headers.get('content-type') || '';
 
-    const historyItem = {
-      title: item.title,
-      uploader: item.uploader,
-      url: item.url,
-      type: item.type,
-      quality: item.quality,
-      speed: item.speed || '1.0x',
-      formatLabel: item.formatLabel,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    };
+      if (!res.ok || contentType.includes('application/json') || contentType.includes('text/plain') || contentType.includes('text/html')) {
+        let errorMsg = '⚠️ Could not download file. YouTube stream may be protected or restricted.';
+        try {
+          const text = await res.text();
+          if (text.startsWith('{')) {
+            const json = JSON.parse(text);
+            if (json.error) errorMsg = json.error;
+          } else if (text.trim()) {
+            errorMsg = text.replace(/^[❌⚠️\s]+/, '⚠️ ');
+          }
+        } catch (e) {}
+        alert(errorMsg);
+        return;
+      }
 
-    // ⚡ Keep max 3 recent download items only! Older items automatically disappear
-    const updated = [historyItem, ...history.filter(h => h.url !== item.url || h.quality !== item.quality)].slice(0, 3);
-    saveHistory(updated);
+      const blob = await res.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      const safeTitle = (item.title || 'sonicmedia-download').replace(/[^a-zA-Z0-9_\-\s.]/g, '_').replace(/\s+/g, ' ').trim();
+      const ext = item.type === 'audio' ? 'mp3' : 'mp4';
+      link.setAttribute('download', `${safeTitle}.${ext}`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+
+      const historyItem = {
+        title: item.title,
+        uploader: item.uploader,
+        url: item.url,
+        type: item.type,
+        quality: item.quality,
+        speed: item.speed || '1.0x',
+        formatLabel: item.formatLabel,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+
+      // ⚡ Keep max 3 recent download items only! Older items automatically disappear
+      const updated = [historyItem, ...history.filter(h => h.url !== item.url || h.quality !== item.quality)].slice(0, 3);
+      saveHistory(updated);
+    } catch (err) {
+      console.error('Download error:', err);
+      alert('⚠️ Network error while downloading file. Please try again.');
+    }
   };
 
   const handleClearHistory = () => {

@@ -15,18 +15,21 @@ const YTDLP_BIN = path.join(process.cwd(), 'server', process.platform === 'win32
 const YTDLP_TMP = path.join(process.cwd(), 'server', process.platform === 'win32' ? 'yt-dlp.tmp.exe' : 'yt-dlp.tmp');
 const YTDLP_PKG = path.join(process.cwd(), 'server', 'yt_pkg');
 
-// Download standalone yt-dlp binary atomically via temp file
-function ensureYtDlpBinary(callback) {
-  if (fs.existsSync(YTDLP_BIN) && fs.statSync(YTDLP_BIN).size > 5000000) {
+// Download & Auto-Update standalone yt-dlp binary atomically via GitHub releases
+function ensureYtDlpBinary(forceUpdate = false, callback = null) {
+  const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
+  const isExpired = fs.existsSync(YTDLP_BIN) && (Date.now() - fs.statSync(YTDLP_BIN).mtimeMs > TWENTY_FOUR_HOURS);
+
+  if (fs.existsSync(YTDLP_BIN) && fs.statSync(YTDLP_BIN).size > 5000000 && !forceUpdate && !isExpired) {
     if (process.platform !== 'win32') {
       try { fs.chmodSync(YTDLP_BIN, 0o755); } catch (e) {}
     }
-    console.log(`✅ Standalone latest yt-dlp binary verified: ${YTDLP_BIN}`);
+    console.log(`✅ Standalone yt-dlp binary verified (Up to date): ${YTDLP_BIN}`);
     if (callback) callback(YTDLP_BIN);
     return YTDLP_BIN;
   }
 
-  console.log(`⏳ Downloading official latest standalone yt-dlp binary to ${YTDLP_TMP}...`);
+  console.log(`⏳ Auto-updating official latest standalone yt-dlp binary from GitHub...`);
   const downloadUrl = process.platform === 'win32'
     ? 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe'
     : 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp';
@@ -44,19 +47,22 @@ function ensureYtDlpBinary(callback) {
             try { fs.chmodSync(YTDLP_TMP, 0o755); } catch (e) {}
           }
           try {
+            if (fs.existsSync(YTDLP_BIN)) {
+              try { fs.unlinkSync(YTDLP_BIN); } catch (e) {}
+            }
             fs.renameSync(YTDLP_TMP, YTDLP_BIN);
             if (process.platform !== 'win32') {
               try { fs.chmodSync(YTDLP_BIN, 0o755); } catch (e) {}
             }
-            console.log(`✅ Standalone latest yt-dlp binary ready: ${YTDLP_BIN}`);
+            console.log(`✅ Standalone latest yt-dlp binary updated successfully: ${YTDLP_BIN}`);
             if (callback) callback(YTDLP_BIN);
           } catch (err) {
-            console.error('Failed to rename temp yt-dlp binary:', err);
+            console.error('Failed to update yt-dlp binary:', err);
           }
         });
       });
     }).on('error', (err) => {
-      console.error('Failed to download yt-dlp binary:', err);
+      console.error('Failed to download yt-dlp binary update:', err);
       if (callback) callback(null);
     });
   }
@@ -64,8 +70,9 @@ function ensureYtDlpBinary(callback) {
   fetchUrl(downloadUrl);
 }
 
-// Start downloading binary immediately
+// Check & Auto-Update yt-dlp binary on server startup and every 24 hours
 ensureYtDlpBinary();
+setInterval(() => ensureYtDlpBinary(true), 24 * 60 * 60 * 1000);
 
 // Dynamically return valid yt-dlp commands that exist on the filesystem
 function getCommands() {
@@ -804,17 +811,6 @@ app.get('/api/download', (req, res) => {
 
   console.log(`[API /download] Direct Media Stream Request for [${type} - ${quality || 'best'} - speed ${speed || '1.0x'}]: ${targetDownloadUrl} -> ${filename}`);
 
-  // ⚡ CRITICAL FIX: Send HTTP Response Headers IMMEDIATELY (< 50ms) to Chrome
-  if (!res.headersSent) {
-    res.setHeader('Content-Type', type === 'audio' ? 'audio/mpeg' : 'video/mp4');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
-    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, X-Filename');
-    res.setHeader('X-Filename', encodeURIComponent(filename));
-    if (typeof res.flushHeaders === 'function') {
-      res.flushHeaders();
-    }
-  }
-
   const commands = getCommands();
   const FFMPEG_BIN = path.join(process.cwd(), 'node_modules', 'ffmpeg-static', process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg');
   const hasFfmpeg = fs.existsSync(FFMPEG_BIN);
@@ -849,12 +845,15 @@ app.get('/api/download', (req, res) => {
     const audioArgs = [
       '-q',
       '--no-progress',
+      '--js-runtimes', 'node',
       '-x',
       '--audio-format', 'mp3',
       '--audio-quality', audioQualityArg,
-      '--extractor-args', 'youtube:player_client=android,web',
+      '--extractor-args', 'youtube:player_client=android,web,ios',
       '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
       '--no-check-certificates',
+      '--no-part',
+      '--force-overwrites',
       ...playlistHandlingArgs,
       '-o', tempFilePath
     ];
@@ -862,11 +861,15 @@ app.get('/api/download', (req, res) => {
     if (afFilter && hasFfmpeg) audioArgs.push('--postprocessor-args', `ffmpeg:-af "${afFilter}"`);
     audioArgs.push(targetDownloadUrl);
 
-
     function tryAudioConvert(index) {
       if (index >= commands.length) {
         console.error(`❌ All audio extraction strategies failed for: ${cleanUrl}`);
-        if (!res.writableEnded) res.end();
+        if (!res.headersSent) {
+          res.setHeader('Content-Type', 'application/json');
+          res.status(500).json({ error: '❌ Audio extraction failed. YouTube link may be restricted or protected.' });
+        } else if (!res.writableEnded) {
+          res.end();
+        }
         return;
       }
 
@@ -879,9 +882,17 @@ app.get('/api/download', (req, res) => {
       }
 
       child.on('close', (code) => {
-        if (fs.existsSync(tempFilePath) && fs.statSync(tempFilePath).size > 1000) {
+        if (fs.existsSync(tempFilePath) && fs.statSync(tempFilePath).size > 5000) {
           const stat = fs.statSync(tempFilePath);
           console.log(`[tryAudioConvert ${label}] ✅ MP3 file ready (${(stat.size / 1024 / 1024).toFixed(2)} MB), streaming to browser...`);
+
+          if (!res.headersSent) {
+            res.setHeader('Content-Type', 'audio/mpeg');
+            res.setHeader('Content-Length', stat.size);
+            res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
+            res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, X-Filename');
+            res.setHeader('X-Filename', encodeURIComponent(filename));
+          }
 
           const readStream = fs.createReadStream(tempFilePath);
           readStream.pipe(res);
@@ -892,6 +903,10 @@ app.get('/api/download', (req, res) => {
         } else {
           tryAudioConvert(index + 1);
         }
+      });
+
+      req.on('close', () => {
+        try { child.kill('SIGKILL'); } catch (e) {}
       });
     }
 
@@ -924,11 +939,14 @@ app.get('/api/download', (req, res) => {
   const videoArgs = [
     '-q',
     '--no-progress',
+    '--js-runtimes', 'node',
     '-f', formatString,
     '--merge-output-format', 'mp4',
     '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     '--no-check-certificates',
     '--ignore-no-formats-error',
+    '--no-part',
+    '--force-overwrites',
     ...playlistHandlingArgs,
     '-o', tempVideoPath
   ];
@@ -942,7 +960,12 @@ app.get('/api/download', (req, res) => {
   function tryVideoConvert(index) {
     if (index >= commands.length) {
       console.error(`❌ All video extraction strategies failed for: ${cleanUrl}`);
-      if (!res.writableEnded) res.end();
+      if (!res.headersSent) {
+        res.setHeader('Content-Type', 'application/json');
+        res.status(500).json({ error: '❌ Video extraction failed. YouTube link may be restricted or protected.' });
+      } else if (!res.writableEnded) {
+        res.end();
+      }
       return;
     }
 
@@ -956,9 +979,17 @@ app.get('/api/download', (req, res) => {
     }
 
     child.on('close', (exitCode) => {
-      if (fs.existsSync(tempVideoPath) && fs.statSync(tempVideoPath).size > 5000) {
+      if (fs.existsSync(tempVideoPath) && fs.statSync(tempVideoPath).size > 10000) {
         const stat = fs.statSync(tempVideoPath);
         console.log(`[tryVideoConvert ${label}] ✅ MP4 video merged successfully (${(stat.size / 1024 / 1024).toFixed(2)} MB), streaming to browser...`);
+
+        if (!res.headersSent) {
+          res.setHeader('Content-Type', 'video/mp4');
+          res.setHeader('Content-Length', stat.size);
+          res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
+          res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, X-Filename');
+          res.setHeader('X-Filename', encodeURIComponent(filename));
+        }
 
         const readStream = fs.createReadStream(tempVideoPath);
         readStream.pipe(res);
