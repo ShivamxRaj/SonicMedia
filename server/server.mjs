@@ -860,8 +860,7 @@ app.get('/api/download', (req, res) => {
 
     // ⚡ INSTANT DIRECT CDN FFMPEG PIPE ENGINE (0-Second Latency Header Response)
     const getUrlArgs = [
-      '-g',
-      '-f', '251/140/ba/b/best',
+      '--dump-single-json',
       '--extractor-args', 'youtube:player_client=android',
       '--no-check-certificates',
       ...playlistHandlingArgs,
@@ -910,8 +909,25 @@ app.get('/api/download', (req, res) => {
         handled = true;
         clearTimeout(timer);
 
-        const directCdnUrl = cdnOutput.trim().split('\n')[0];
-        if (code === 0 && directCdnUrl && directCdnUrl.startsWith('http')) {
+        let directCdnUrl = '';
+        if (code === 0 && cdnOutput) {
+          try {
+            if (cdnOutput.trim().startsWith('{')) {
+              const json = JSON.parse(cdnOutput);
+              const audioFormats = (json.formats || []).filter(f => f.acodec !== 'none' && f.vcodec === 'none');
+              const bestAudio = audioFormats[audioFormats.length - 1] || (json.formats || []).slice(-1)[0];
+              if (bestAudio && bestAudio.url) {
+                directCdnUrl = bestAudio.url;
+              }
+            } else {
+              directCdnUrl = cdnOutput.trim().split('\n')[0];
+            }
+          } catch (e) {
+            directCdnUrl = cdnOutput.trim().split('\n')[0];
+          }
+        }
+
+        if (directCdnUrl && directCdnUrl.startsWith('http')) {
           console.log(`[tryCdnPipe ${label}] ✅ Direct CDN stream URL obtained in 2s! Streaming MP3 directly to client...`);
 
           let ffmpegArgs = [
