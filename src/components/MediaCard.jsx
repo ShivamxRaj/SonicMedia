@@ -46,25 +46,46 @@ export default function MediaCard({ media, onDownload, onPreview, isPro, onOpenP
     }
 
     setIsDownloading(true);
+    setDownloadProgress(10);
     setDownloadSuccess(false);
 
-    try {
-      const res = await onDownload({
-        url: media.url,
-        type: activeTab,
-        quality: selectedQuality,
-        speed: activeTab === 'audio' ? (audioSettings.speed || '1.0x') : '1.0x',
-        title: audioSettings.customTitle || media.title,
-        uploader: audioSettings.customArtist || media.uploader,
-        formatLabel: currentFormat.label,
-        audioSettings: activeTab === 'audio' ? audioSettings : null
-      });
+    let currentProg = 10;
+    const progressInterval = setInterval(() => {
+      currentProg = Math.min(currentProg + Math.floor(Math.random() * 7) + 3, 92);
+      setDownloadProgress(currentProg);
+    }, 450);
 
+    try {
+      const res = await onDownload(
+        {
+          url: media.url,
+          type: activeTab,
+          quality: selectedQuality,
+          speed: activeTab === 'audio' ? (audioSettings.speed || '1.0x') : '1.0x',
+          title: audioSettings.customTitle || media.title,
+          uploader: audioSettings.customArtist || media.uploader,
+          formatLabel: currentFormat.label,
+          audioSettings: activeTab === 'audio' ? audioSettings : null
+        },
+        (realPercent) => {
+          clearInterval(progressInterval);
+          setDownloadProgress(Math.max(realPercent, currentProg));
+        }
+      );
+
+      clearInterval(progressInterval);
       if (res !== false) {
+        setDownloadProgress(100);
         setDownloadSuccess(true);
-        setTimeout(() => setDownloadSuccess(false), 5000);
+        setTimeout(() => {
+          setDownloadSuccess(false);
+          setDownloadProgress(0);
+        }, 5000);
+      } else {
+        setDownloadProgress(0);
       }
     } finally {
+      clearInterval(progressInterval);
       setIsDownloading(false);
     }
   };

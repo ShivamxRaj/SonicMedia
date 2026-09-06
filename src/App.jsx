@@ -123,8 +123,8 @@ export default function App() {
     }
   };
 
-  // Safe Browser File Download Engine with content-type & status validation
-  const handleDownload = async (item) => {
+  // Safe Browser File Download Engine with content-type & stream progress validation
+  const handleDownload = async (item, onProgress) => {
     const speedParam = item.speed ? `&speed=${encodeURIComponent(item.speed)}` : '';
     const downloadTarget = item.download_url || `/api/download?url=${encodeURIComponent(item.url)}&type=${item.type}&quality=${item.quality}${speedParam}&title=${encodeURIComponent(item.title)}`;
     
@@ -147,7 +147,26 @@ export default function App() {
         return false;
       }
 
-      const blob = await res.blob();
+      const contentLength = res.headers.get('content-length');
+      const totalBytes = contentLength ? parseInt(contentLength, 10) : 0;
+      let receivedBytes = 0;
+
+      const reader = res.body.getReader();
+      const chunks = [];
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        receivedBytes += value.length;
+
+        if (totalBytes > 0 && typeof onProgress === 'function') {
+          const percent = Math.min(Math.round((receivedBytes / totalBytes) * 100), 99);
+          onProgress(percent);
+        }
+      }
+
+      const blob = new Blob(chunks, { type: contentType.split(';')[0] || (item.type === 'audio' ? 'audio/mpeg' : 'video/mp4') });
       const blobUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = blobUrl;
@@ -158,6 +177,8 @@ export default function App() {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(blobUrl);
+
+      if (typeof onProgress === 'function') onProgress(100);
 
       const historyItem = {
         title: item.title,
