@@ -558,6 +558,66 @@ app.get('/api/debug', (req, res) => {
   });
 });
 
+// Debug endpoint to test -g direct CDN stream URL extraction on Render
+app.get('/api/debug-g', (req, res) => {
+  const testUrl = req.query.url || 'https://www.youtube.com/watch?v=A0_LHc8jN2E';
+  const results = [];
+  const commands = getCommands();
+  let completed = 0;
+
+  if (commands.length === 0) {
+    return res.json({ testUrl, status: 'no_commands_found' });
+  }
+
+  const testGArgs = [
+    '-4',
+    '-g',
+    '-f', '251/140/ba/b/best',
+    '--extractor-args', 'youtube:player_client=android',
+    '--no-check-certificates',
+    '--no-playlist',
+    testUrl
+  ];
+
+  commands.forEach(({ label, cmd, extraArgs, env }) => {
+    let py;
+    try {
+      py = spawn(cmd, [...extraArgs, ...testGArgs], { env: env || process.env });
+    } catch (e) {
+      results.push({ label, cmd, status: 'spawn_error', error: e.message });
+      completed++;
+      if (completed === commands.length) res.json({ testUrl, commands: results });
+      return;
+    }
+
+    let stdout = '';
+    let stderr = '';
+
+    py.stdout.on('data', d => stdout += d.toString());
+    py.stderr.on('data', d => stderr += d.toString());
+
+    py.on('error', (e) => {
+      results.push({ label, cmd, status: 'error', error: e.message });
+      completed++;
+      if (completed === commands.length) res.json({ testUrl, commands: results });
+    });
+
+    py.on('close', (code) => {
+      const url = stdout.trim().split('\n')[0];
+      results.push({
+        label,
+        cmd,
+        exitCode: code,
+        status: (code === 0 && url.startsWith('http')) ? 'ok' : 'fail',
+        url: url.slice(0, 100),
+        stderr: stderr.slice(-300)
+      });
+      completed++;
+      if (completed === commands.length) res.json({ testUrl, commands: results });
+    });
+  });
+});
+
 // Submit Payment UTR for Real-time Telegram Approval
 app.post('/api/submit-payment', (req, res) => {
   const { utr, amount } = req.body;
