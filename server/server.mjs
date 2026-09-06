@@ -26,6 +26,14 @@ const YTDLP_PKG = path.join(process.cwd(), 'server', 'yt_pkg');
 const COOKIES_FILE = path.join(process.cwd(), 'server', 'cookies.txt');
 
 function getCookieArgs() {
+  try {
+    if (fs.existsSync(COOKIES_FILE) && fs.statSync(COOKIES_FILE).size > 50) {
+      const content = fs.readFileSync(COOKIES_FILE, 'utf8');
+      if (content.includes('youtube.com') || content.includes('google.com') || content.includes('LOGIN_INFO') || content.includes('VISITOR_INFO1_LIVE') || content.includes('PREF')) {
+        return ['--cookies', COOKIES_FILE];
+      }
+    }
+  } catch (e) {}
   return [];
 }
 
