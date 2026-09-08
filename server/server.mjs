@@ -1284,56 +1284,10 @@ app.get('/api/download', (req, res) => {
       }
     });
 
-    req.on('close', () => {
-      try { ytdlp.kill('SIGKILL'); } catch (e) {}
-      try { ff.kill('SIGKILL'); } catch (e) {}
-    });
+    return tryDirectVideoPipe(0);
   }
 
   return tryDirectVideoPipe(0);
-        handled = true;
-        clearTimeout(timer);
-        console.error(`[tryVideoConvert ${label}] process error:`, err.message);
-        tryVideoConvert(index + 1);
-      }
-    });
-
-    child.on('close', (exitCode) => {
-      if (handled) return;
-      handled = true;
-      clearTimeout(timer);
-      if (fs.existsSync(tempVideoPath) && fs.statSync(tempVideoPath).size > 10000) {
-        const stat = fs.statSync(tempVideoPath);
-        console.log(`[tryVideoConvert ${label}] ✅ MP4 video merged successfully (${(stat.size / 1024 / 1024).toFixed(2)} MB), streaming to browser...`);
-
-        if (!res.headersSent) {
-          res.setHeader('Content-Type', 'video/mp4');
-          res.setHeader('Content-Length', stat.size);
-          res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
-          res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, X-Filename');
-          res.setHeader('X-Filename', encodeURIComponent(filename));
-        }
-
-        const readStream = fs.createReadStream(tempVideoPath);
-        readStream.pipe(res);
-
-        const cleanup = () => {
-          try { if (fs.existsSync(tempVideoPath)) fs.unlinkSync(tempVideoPath); } catch (e) {}
-        };
-        res.on('finish', cleanup);
-        res.on('close', cleanup);
-      } else {
-        console.error(`[tryVideoConvert ${label}] failed (code ${exitCode}), trying fallback...`);
-        tryVideoConvert(index + 1);
-      }
-    });
-
-    req.on('close', () => {
-      try { child.kill('SIGKILL'); } catch (e) {}
-    });
-  }
-
-  tryVideoConvert(0);
 });
 
 // Fallback to index.html for SPA routing
