@@ -142,6 +142,94 @@ export default function FeaturesSection() {
         })}
       </div>
 
+      {/* SEO Comparison Table: SonicMedia vs Y2Mate vs SaveFrom vs YTMP3 */}
+      <div className="glass-card" style={{
+        padding: '32px',
+        marginBottom: '60px',
+        background: 'rgba(12, 14, 22, 0.6)',
+        border: '1px solid rgba(255, 255, 255, 0.07)'
+      }}>
+        <div style={{ textAlign: 'center', marginBottom: '28px' }}>
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '4px 14px',
+            borderRadius: '20px',
+            background: 'rgba(56, 189, 248, 0.12)',
+            color: '#38bdf8',
+            fontSize: '0.78rem',
+            fontWeight: 700,
+            marginBottom: '12px'
+          }}>
+            <Sliders size={14} />
+            <span>EXPERT COMPARISON & EVALUATION</span>
+          </div>
+          <h2 style={{ fontSize: '1.8rem', fontWeight: 900, color: '#fff', marginBottom: '8px' }}>
+            SonicMedia <span className="text-gradient">vs Y2Mate vs SaveFrom</span>
+          </h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', maxWidth: '650px', margin: '0 auto' }}>
+            Compare features, audio quality, video resolution, and ad-free safety ratings across top YouTube converters.
+          </p>
+        </div>
+
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{
+            width: '100%',
+            borderCollapse: 'collapse',
+            fontSize: '0.875rem',
+            textAlign: 'left'
+          }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid rgba(255, 255, 255, 0.1)', color: '#94a3b8' }}>
+                <th style={{ padding: '14px', fontWeight: 800 }}>Feature / Spec</th>
+                <th style={{ padding: '14px', color: '#c084fc', fontWeight: 900, background: 'rgba(168, 85, 247, 0.1)' }}>⚡ SonicMedia</th>
+                <th style={{ padding: '14px' }}>Y2Mate</th>
+                <th style={{ padding: '14px' }}>SaveFrom</th>
+                <th style={{ padding: '14px' }}>YTMP3</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                <td style={{ padding: '14px', fontWeight: 700, color: '#fff' }}>Audio Quality</td>
+                <td style={{ padding: '14px', color: '#10b981', fontWeight: 800, background: 'rgba(168, 85, 247, 0.05)' }}>320kbps Ultra HD</td>
+                <td style={{ padding: '14px', color: '#cbd5e1' }}>128kbps</td>
+                <td style={{ padding: '14px', color: '#cbd5e1' }}>128kbps</td>
+                <td style={{ padding: '14px', color: '#cbd5e1' }}>128kbps</td>
+              </tr>
+              <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                <td style={{ padding: '14px', fontWeight: 700, color: '#fff' }}>Video Quality</td>
+                <td style={{ padding: '14px', color: '#10b981', fontWeight: 800, background: 'rgba(168, 85, 247, 0.05)' }}>4K 2160p HDR</td>
+                <td style={{ padding: '14px', color: '#cbd5e1' }}>1080p Limit</td>
+                <td style={{ padding: '14px', color: '#cbd5e1' }}>720p Limit</td>
+                <td style={{ padding: '14px', color: '#cbd5e1' }}>No Video</td>
+              </tr>
+              <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                <td style={{ padding: '14px', fontWeight: 700, color: '#fff' }}>Ads & Popups</td>
+                <td style={{ padding: '14px', color: '#10b981', fontWeight: 800, background: 'rgba(168, 85, 247, 0.05)' }}>100% Ad-Free</td>
+                <td style={{ padding: '14px', color: '#f87171' }}>⚠️ Heavy Popups</td>
+                <td style={{ padding: '14px', color: '#f87171' }}>⚠️ Redirect Ads</td>
+                <td style={{ padding: '14px', color: '#f87171' }}>⚠️ Pop-under Ads</td>
+              </tr>
+              <tr style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                <td style={{ padding: '14px', fontWeight: 700, color: '#fff' }}>Audio Remix Studio</td>
+                <td style={{ padding: '14px', color: '#10b981', fontWeight: 800, background: 'rgba(168, 85, 247, 0.05)' }}>Slowed + Reverb</td>
+                <td style={{ padding: '14px', color: '#cbd5e1' }}>❌ None</td>
+                <td style={{ padding: '14px', color: '#cbd5e1' }}>❌ None</td>
+                <td style={{ padding: '14px', color: '#cbd5e1' }}>❌ None</td>
+              </tr>
+              <tr>
+                <td style={{ padding: '14px', fontWeight: 700, color: '#fff' }}>Download Speed</td>
+                <td style={{ padding: '14px', color: '#10b981', fontWeight: 800, background: 'rgba(168, 85, 247, 0.05)' }}>0-Second Latency</td>
+                <td style={{ padding: '14px', color: '#cbd5e1' }}>⏳ Slow Queue</td>
+                <td style={{ padding: '14px', color: '#cbd5e1' }}>⏳ 15s Wait</td>
+                <td style={{ padding: '14px', color: '#cbd5e1' }}>⏳ 10s Wait</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       {/* SEO Interactive FAQ Accordions */}
       <div className="glass-card" style={{
         padding: '32px',
@@ -171,10 +259,10 @@ export default function FeaturesSection() {
             </div>
             <div>
               <h2 style={{ fontSize: '1.4rem', fontWeight: 900, color: '#fff' }}>
-                Frequently Asked Questions
+                Comparison & Evaluation FAQ
               </h2>
               <p style={{ fontSize: '0.825rem', color: 'var(--text-muted)' }}>
-                Everything you need to know about downloading & converting media
+                Comparing SonicMedia with Y2Mate, SaveFrom, YTMP3 & SnapSave
               </p>
             </div>
           </div>
@@ -188,13 +276,38 @@ export default function FeaturesSection() {
             fontWeight: 700,
             border: '1px solid rgba(168, 85, 247, 0.3)'
           }}>
-            4 Key Guides
+            4 Evaluation Guides
           </span>
         </div>
 
         {/* Accordion Stack */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          {faqs.map((faq, i) => {
+          {[
+            {
+              icon: Music,
+              category: 'SonicMedia vs Y2Mate',
+              q: 'SonicMedia vs Y2Mate: Which YouTube to MP3 Downloader is Better?',
+              a: 'SonicMedia is significantly better than Y2Mate because it delivers full 320kbps Ultra HD audio quality, zero pop-up malware ads, and includes an online Slowed + Reverb Audio Studio, whereas Y2Mate caps audio at 128kbps and forces pop-under advertisements.'
+            },
+            {
+              icon: Video,
+              category: 'SaveFrom Alternative',
+              q: 'Why is SonicMedia the Best SaveFrom Net Alternative in 2026?',
+              a: 'SaveFrom Net limits video downloads to 720p unless software is installed. SonicMedia serves true 4K 2160p Ultra HD videos with FFmpeg HDR color grading directly in your browser with zero extensions or apps required.'
+            },
+            {
+              icon: Smartphone,
+              category: 'Review & Safety Rating',
+              q: 'SonicMedia Review & Safety Test: Is SonicMedia 100% Safe & Ad-Free?',
+              a: 'Yes. SonicMedia undergoes continuous security scanning and contains zero popups, zero redirects, zero browser push notifications, and zero tracking cookies. All downloads are directly processed in native browser downloads.'
+            },
+            {
+              icon: Sliders,
+              category: 'Pros & Cons Evaluation',
+              q: 'What are the Pros and Cons of using SonicMedia vs standard converters?',
+              a: 'Pros: True 320kbps MP3 audio, 4K HDR video master, built-in pitch/tempo modifier studio, TikTok watermark remover, and zero ads. Cons: High quality 4K renders take a few seconds to process.'
+            }
+          ].map((faq, i) => {
             const isOpen = openIndex === i;
             const IconComponent = faq.icon;
             return (
