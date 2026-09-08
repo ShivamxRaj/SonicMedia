@@ -1036,7 +1036,7 @@ app.get('/api/download', (req, res) => {
         '-q',
         '--no-progress',
         '-o', '-',
-        '-f', '251/250/249/140/ba/b/best',
+        '-f', '251/250/249/140/ba/bestaudio/b/best/18/22',
         '--js-runtimes', 'node',
         '--geo-bypass',
         '--geo-bypass-country', 'US',
