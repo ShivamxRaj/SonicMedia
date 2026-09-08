@@ -4,21 +4,16 @@ Render par Cloud IP rate limiting aur strict 30-second gateway timeouts hote hai
 
 ---
 
-## 🏆 Option 1: Koyeb (RECOMMENDED — Best Free Render Alternative)
+## 🏆 Option 1: Zeabur (RECOMMENDED — Best 1-Click Free Deploy)
 
-**Koyeb** ek fast cloud platform hai jo GitHub se direct single-click deploy hota hai. Isme 30s timeout restriction nahi hota aur IP reputation Render se kaafi better hai.
+**Zeabur** ek super-fast hosting platform hai jo GitHub repositories ko automatically detect karke Single-Click me deploy kar deta hai. Isme koi 30s timeout nahi hota aur IP reputation Render se kaafi better hai.
 
-### Setup Steps (2 Minutes):
-1. [koyeb.com](https://www.koyeb.com/) par free account banayein (GitHub se login karein).
-2. Dashboard par **Create Service** -> **GitHub** choose karein.
-3. Apna repository **`ShivamxRaj/SonicMedia`** select karein.
-4. Settings enter karein:
-   - **Build Command**: `npm install && npm run build`
-   - **Run Command**: `node server/server.mjs`
-   - **Port**: `5000` (ya default environment port)
-   - **Instance Type**: Free Eco / Micro
-5. **Deploy** button dabayein!
-6. Koyeb aapko free HTTPS URL generate karke dega aur custom domain (`sonicmedia.me`) bhi single click me link ho jayega.
+### Setup Steps (1 Minute):
+1. [zeabur.com](https://zeabur.com) open karein aur **Sign in with GitHub** par click karein.
+2. **Create Project** -> **Deploy New Service** -> **GitHub** select karein.
+3. Apna repository **`ShivamxRaj/SonicMedia`** choose karein.
+4. Zeabur automatically Node.js build detect kar lega.
+5. Service Settings -> **Domain** section me click karke free `*.zeabur.app` subdomain ya apna custom domain `sonicmedia.me` CNAME add karein!
 
 ---
 
@@ -31,32 +26,15 @@ Render par Cloud IP rate limiting aur strict 30-second gateway timeouts hote hai
 2. Click **Create new Space**.
 3. Space Name: `sonicmedia`
 4. Select SDK: **Docker** -> **Blank**.
-5. Code clone/push karein ya GitHub repo link karein.
+5. GitHub repository Sync / Import select karein!
 
 ---
 
-## ⚡ Option 3: Fly.io (Ultra Fast Edge Hosting)
-
-**Fly.io** edge containers deta hai jo video/audio streams ko lightning-fast pipe karta hai.
-
-### Setup Steps:
-1. `flyctl` CLI install karein:
-   ```bash
-   powershell -Command "iwr https://fly.io/install.ps1 -useb | iex"
-   ```
-2. Terminal me project folder (`d:/music`) me run karein:
-   ```bash
-   fly launch
-   fly deploy
-   ```
-
----
-
-## 👑 Option 4: Oracle Cloud Always Free VPS (Lifetime Free Dedicated Server)
+## 👑 Option 3: Oracle Cloud Always Free VPS (Lifetime Dedicated Linux Server)
 
 Oracle Cloud 4 ARM Cores + 24GB RAM + 200GB Storage **Lifetime Always Free** Linux VPS deta hai.
 
 ### Why it's the Ultimate Solution:
-- Dedicated IP milta hai jo kisi cloud provider (Render/AWS) ki tarah block nahi hota.
+- Dedicated IP milta hai jo kisi cloud provider ki tarah block nahi hota.
 - 100% full root access: YouTube downloading, 4K FFmpeg encoding, zero timeout limits!
-- `sonicmedia.me` hamesha super-fast chalega.
+- `sonicmedia.me` hamesha 24/7 super-fast chalega.
