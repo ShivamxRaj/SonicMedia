@@ -7,3 +7,6 @@ dist
 server/yt_pkg/
 server/temp/
 scratch/
+*.mp3
+*.webm
+Untitled*.txt
