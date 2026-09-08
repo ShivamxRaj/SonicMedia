@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Download, Music, Video, Play, Eye, Clock, CheckCircle2, 
-  Sparkles, Sliders, Share2, Lock
+  Sparkles, Sliders, Share2, Lock, AlertTriangle, X
 } from 'lucide-react';
 import AudioStudioTools from './AudioStudioTools';
 
@@ -17,6 +17,8 @@ export default function MediaCard({ media, onDownload, onPreview, isPro, onOpenP
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
+  const [downloadError, setDownloadError] = useState(null);
+  const [copied, setCopied] = useState(false);
   const [streamedSize, setStreamedSize] = useState('');
 
   if (!media) return null;
@@ -49,6 +51,7 @@ export default function MediaCard({ media, onDownload, onPreview, isPro, onOpenP
     setIsDownloading(true);
     setDownloadProgress(10);
     setDownloadSuccess(false);
+    setDownloadError(null);
     setStreamedSize('');
 
     let currentProg = 10;
@@ -82,7 +85,7 @@ export default function MediaCard({ media, onDownload, onPreview, isPro, onOpenP
       );
 
       clearInterval(progressInterval);
-      if (res !== false) {
+      if (res && res.success !== false) {
         setDownloadProgress(100);
         setDownloadSuccess(true);
         setTimeout(() => {
@@ -93,7 +96,17 @@ export default function MediaCard({ media, onDownload, onPreview, isPro, onOpenP
       } else {
         setDownloadProgress(0);
         setStreamedSize('');
+        if (res && res.error) {
+          setDownloadError(res.error);
+        } else {
+          setDownloadError('⚠️ Download failed. YouTube link may be protected or restricted.');
+        }
       }
+    } catch (err) {
+      clearInterval(progressInterval);
+      setDownloadProgress(0);
+      setStreamedSize('');
+      setDownloadError('⚠️ An error occurred while processing the download.');
     } finally {
       clearInterval(progressInterval);
       setIsDownloading(false);
@@ -133,16 +146,52 @@ export default function MediaCard({ media, onDownload, onPreview, isPro, onOpenP
               navigator.share({ title: media.title, url: media.url }).catch(() => {});
             } else {
               navigator.clipboard.writeText(media.url);
-              alert('Link copied to clipboard!');
+              setCopied(true);
+              setTimeout(() => setCopied(false), 2000);
             }
           }}
           className="btn-secondary"
           style={{ padding: '6px 14px', fontSize: '0.8rem' }}
         >
-          <Share2 size={14} />
-          <span>Share</span>
+          {copied ? <CheckCircle2 size={14} color="#10b981" /> : <Share2 size={14} />}
+          <span>{copied ? 'Copied!' : 'Share'}</span>
         </button>
       </div>
+
+      {downloadError && (
+        <div style={{
+          background: 'rgba(239, 68, 68, 0.12)',
+          border: '1px solid rgba(239, 68, 68, 0.35)',
+          borderRadius: 'var(--radius-md)',
+          padding: '12px 16px',
+          marginBottom: '20px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '12px',
+          color: '#f87171',
+          fontSize: '0.875rem'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <AlertTriangle size={18} color="#f87171" style={{ flexShrink: 0 }} />
+            <span>{downloadError}</span>
+          </div>
+          <button
+            onClick={() => setDownloadError(null)}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: '#f87171',
+              cursor: 'pointer',
+              padding: '4px',
+              display: 'flex',
+              alignItems: 'center'
+            }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
 
       {/* Main Grid Content */}
       <div className="media-card-grid">

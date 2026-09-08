@@ -37,8 +37,8 @@ function getCookieArgs() {
   return [];
 }
 
-function getExtractorArgs() {
-  return ['--extractor-args', 'youtube:player_client=mweb,android,ios,web'];
+function getExtractorArgs(client = 'android') {
+  return ['--extractor-args', `youtube:player_client=${client}`];
 }
 
 // Download & Auto-Update standalone yt-dlp binary atomically via GitHub releases
@@ -100,7 +100,7 @@ function ensureYtDlpBinary(forceUpdate = false, callback = null) {
 ensureYtDlpBinary();
 setInterval(() => ensureYtDlpBinary(true), 24 * 60 * 60 * 1000);
 
-// Dynamically return valid yt-dlp commands that exist on the filesystem
+// Dynamically return valid yt-dlp commands across cascading player client fallback strategies
 function getCommands() {
   const homeBin = path.join(process.env.HOME || '/root', '.local', 'bin', 'yt-dlp');
   const nodeModulesBin = path.join(process.cwd(), 'node_modules', 'yt-dlp-exec', 'bin', process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
@@ -115,11 +115,33 @@ function getCommands() {
     PYTHONPATH: fs.existsSync(YTDLP_PKG) ? `${YTDLP_PKG}${pathSep}${process.env.PYTHONPATH || ''}` : process.env.PYTHONPATH
   };
 
+  let baseCmd = 'python3';
+  let baseExtra = ['-m', 'yt_dlp'];
+
   if (fs.existsSync(YTDLP_BIN) && fs.statSync(YTDLP_BIN).size > 1000000) {
-    return [{ label: 'server-yt-dlp-bin', cmd: YTDLP_BIN, extraArgs: [], env: envWithPkg }];
+    baseCmd = YTDLP_BIN;
+    baseExtra = [];
+  } else if (fs.existsSync(nodeModulesBin)) {
+    baseCmd = nodeModulesBin;
+    baseExtra = [];
   }
 
-  return [{ label: 'python3-ytpkg', cmd: 'python3', extraArgs: ['-m', 'yt_dlp'], env: envWithPkg }];
+  const profiles = [
+    'android',
+    'mweb',
+    'tv_embedded',
+    'web_embedded',
+    'android_vr',
+    'ios',
+    'mweb,android,ios,web'
+  ];
+
+  return profiles.map((client) => ({
+    label: `yt-dlp-${client}`,
+    cmd: baseCmd,
+    extraArgs: [...baseExtra, ...getExtractorArgs(client)],
+    env: envWithPkg
+  }));
 }
 
 // Dynamic Sitemap.xml endpoint for Googlebot Indexer
@@ -492,6 +514,23 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Admin Cookie Sync Endpoint to refresh cookies directly from browser
+app.post('/api/admin/upload-cookies', (req, res) => {
+  const { cookies } = req.body;
+  if (!cookies || typeof cookies !== 'string' || cookies.length < 50) {
+    return res.status(400).json({ error: 'Valid Netscape format cookie string is required.' });
+  }
+
+  try {
+    fs.writeFileSync(COOKIES_FILE, cookies, 'utf8');
+    console.log(`✅ [ADMIN] YouTube Netscape cookies updated successfully (${cookies.length} bytes)`);
+    return res.json({ success: true, message: `Cookies updated successfully (${cookies.length} bytes).` });
+  } catch (err) {
+    console.error('Failed to write cookies file:', err);
+    return res.status(500).json({ error: 'Failed to save cookies on server.' });
+  }
+});
+
 // Debug endpoint to test yt-dlp availability & pipe execution on Render
 app.get('/api/debug', (req, res) => {
   const testUrl = req.query.url || 'https://youtu.be/bKuL8VRXYKM';
@@ -512,7 +551,6 @@ app.get('/api/debug', (req, res) => {
     '--js-runtimes', 'node',
     '-o', '-',
     '-f', '251/250/249/140/ba/b/best',
-    ...getExtractorArgs(),
     '--geo-bypass',
     '--geo-bypass-country', 'US',
     '--no-check-certificates',
@@ -592,7 +630,6 @@ app.get('/api/debug-g', (req, res) => {
     '-f', 'ba/b/18/best',
     '--remote-components', 'ejs:github',
     '--js-runtimes', 'node',
-    ...getExtractorArgs(),
     '--geo-bypass',
     '--geo-bypass-country', 'US',
     '--no-check-certificates',
@@ -749,7 +786,6 @@ app.get('/api/info', async (req, res) => {
     '--dump-single-json',
     '--remote-components', 'ejs:github',
     '--js-runtimes', 'node',
-    ...getExtractorArgs(),
     '--geo-bypass',
     '--geo-bypass-country', 'US',
     '--no-check-certificates',
@@ -961,7 +997,6 @@ app.get('/api/download', (req, res) => {
       '-g',
       '-f', '251/250/249/140/ba/b/best',
       '--js-runtimes', 'node',
-      ...getExtractorArgs(),
       '--geo-bypass',
       '--geo-bypass-country', 'US',
       '--no-check-certificates',
@@ -1114,7 +1149,6 @@ app.get('/api/download', (req, res) => {
       '--no-progress',
       '--remote-components', 'ejs:github',
       '--js-runtimes', 'node',
-      ...getExtractorArgs(),
       '--geo-bypass',
       '--geo-bypass-country', 'US',
       '-x',
@@ -1137,7 +1171,7 @@ app.get('/api/download', (req, res) => {
         console.error(`❌ All audio extraction strategies failed for: ${cleanUrl}`);
         if (!res.headersSent) {
           res.setHeader('Content-Type', 'application/json');
-          res.status(400).json({ error: '⚠️ YouTube restricted cloud IP downloads for this link. Please add YouTube Netscape cookies to server/cookies.txt.' });
+          res.status(400).json({ error: '⚠️ Could not process this YouTube link right now. Please verify the URL or try another track.' });
         } else if (!res.writableEnded) {
           res.end();
         }
@@ -1237,7 +1271,6 @@ app.get('/api/download', (req, res) => {
     '--no-progress',
     '--remote-components', 'ejs:github',
     '--js-runtimes', 'node',
-    ...getExtractorArgs(),
     '--geo-bypass',
     '--geo-bypass-country', 'US',
     '-f', formatString,

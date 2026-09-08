@@ -185,9 +185,10 @@ export default function InAppPlayer({ media, onClose }) {
           </button>
 
           <button
-            onClick={() => alert('Full screen audio player engaged')}
+            onClick={() => {}}
             className="btn-secondary"
             style={{ borderRadius: '50%', width: '46px', height: '46px', padding: 0 }}
+            title="Maximize Player"
           >
             <Maximize2 size={18} />
           </button>

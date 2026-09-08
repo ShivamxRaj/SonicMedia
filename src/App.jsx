@@ -143,8 +143,12 @@ export default function App() {
             errorMsg = text.replace(/^[❌⚠️\s]+/, '⚠️ ');
           }
         } catch (e) {}
-        alert(errorMsg);
-        return false;
+
+        if (errorMsg.includes('cookies.txt') || errorMsg.includes('restricted cloud IP')) {
+          errorMsg = '⚠️ YouTube restricted cloud streaming for this link. Please try again or try another video link.';
+        }
+
+        return { success: false, error: errorMsg };
       }
 
       const contentLength = res.headers.get('content-length');
@@ -199,11 +203,10 @@ export default function App() {
       // ⚡ Keep max 3 recent download items only! Older items automatically disappear
       const updated = [historyItem, ...history.filter(h => h.url !== item.url || h.quality !== item.quality)].slice(0, 3);
       saveHistory(updated);
-      return true;
+      return { success: true };
     } catch (err) {
       console.error('Download error:', err);
-      alert('⚠️ Network error while downloading file. Please try again.');
-      return false;
+      return { success: false, error: '⚠️ Network error while downloading file. Please try again.' };
     }
   };
 
