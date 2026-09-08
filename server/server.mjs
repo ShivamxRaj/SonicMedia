@@ -127,18 +127,17 @@ function getCommands() {
   }
 
   const profiles = [
-    'android',
-    'tv_embedded',
-    'web_embedded',
-    'android_vr',
-    'mweb',
-    'ios'
+    { client: 'android', ua: 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36' },
+    { client: 'android_vr', ua: 'Mozilla/5.0 (Android 10; Mobile VR)' },
+    { client: 'tv_embedded', ua: 'Mozilla/5.0 (SMART-TV; Linux; Tizen 6.0) AppleWebKit/537.36' },
+    { client: 'web_embedded', ua: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+    { client: 'mweb', ua: 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36' }
   ];
 
-  return profiles.map((client) => ({
+  return profiles.map(({ client, ua }) => ({
     label: `yt-dlp-${client}`,
     cmd: baseCmd,
-    extraArgs: [...baseExtra, ...getExtractorArgs(client)],
+    extraArgs: [...baseExtra, ...getExtractorArgs(client), '--user-agent', ua],
     env: envWithPkg
   }));
 }
