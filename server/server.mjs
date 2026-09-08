@@ -128,12 +128,11 @@ function getCommands() {
 
   const profiles = [
     'android',
-    'mweb',
     'tv_embedded',
     'web_embedded',
     'android_vr',
-    'ios',
-    'mweb,android,ios,web'
+    'mweb',
+    'ios'
   ];
 
   return profiles.map((client) => ({
@@ -1025,10 +1024,10 @@ app.get('/api/download', (req, res) => {
         if (!handled) {
           handled = true;
           try { ytdlp.kill('SIGKILL'); } catch (e) {}
-          console.error(`[tryCdnPipe ${label}] timed out after 15s, trying next strategy...`);
+          console.error(`[tryCdnPipe ${label}] timed out after 5s, trying next strategy...`);
           tryCdnPipe(index + 1);
         }
-      }, 15000);
+      }, 5000);
 
       ytdlp.on('error', (err) => {
         if (!handled) {
@@ -1192,10 +1191,10 @@ app.get('/api/download', (req, res) => {
         if (!handled) {
           handled = true;
           try { child.kill('SIGKILL'); } catch (e) {}
-          console.error(`[tryAudioConvertTemp ${label}] timed out after 30s, trying next strategy...`);
+          console.error(`[tryAudioConvertTemp ${label}] timed out after 12s, trying next strategy...`);
           tryAudioConvertTemp(index + 1);
         }
-      }, 30000);
+      }, 12000);
 
       child.on('error', (err) => {
         if (!handled) {
@@ -1314,9 +1313,19 @@ app.get('/api/download', (req, res) => {
       return tryVideoConvert(index + 1);
     }
 
+    const timer = setTimeout(() => {
+      if (!handled) {
+        handled = true;
+        try { child.kill('SIGKILL'); } catch (e) {}
+        console.error(`[tryVideoConvert ${label}] timed out after 5s, trying next strategy...`);
+        tryVideoConvert(index + 1);
+      }
+    }, 5000);
+
     child.on('error', (err) => {
       if (!handled) {
         handled = true;
+        clearTimeout(timer);
         console.error(`[tryVideoConvert ${label}] process error:`, err.message);
         tryVideoConvert(index + 1);
       }
@@ -1325,6 +1334,7 @@ app.get('/api/download', (req, res) => {
     child.on('close', (exitCode) => {
       if (handled) return;
       handled = true;
+      clearTimeout(timer);
       if (fs.existsSync(tempVideoPath) && fs.statSync(tempVideoPath).size > 10000) {
         const stat = fs.statSync(tempVideoPath);
         console.log(`[tryVideoConvert ${label}] ✅ MP4 video merged successfully (${(stat.size / 1024 / 1024).toFixed(2)} MB), streaming to browser...`);
