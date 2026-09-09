@@ -100,6 +100,8 @@ function ensureYtDlpBinary(forceUpdate = false, callback = null) {
 ensureYtDlpBinary();
 setInterval(() => ensureYtDlpBinary(true), 24 * 60 * 60 * 1000);
 
+const JS_RUNTIME_ARG = process.execPath ? `node:${process.execPath}` : 'node';
+
 // Dynamically return valid yt-dlp commands across cascading player client fallback strategies
 function getCommands() {
   const homeBin = path.join(process.env.HOME || '/root', '.local', 'bin', 'yt-dlp');
@@ -128,16 +130,18 @@ function getCommands() {
 
   const profiles = [
     { client: 'android', ua: 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36' },
-    { client: 'android_vr', ua: 'Mozilla/5.0 (Android 10; Mobile VR)' },
-    { client: 'tv_embedded', ua: 'Mozilla/5.0 (SMART-TV; Linux; Tizen 6.0) AppleWebKit/537.36' },
-    { client: 'web_embedded', ua: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
-    { client: 'mweb', ua: 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36' }
+    { client: 'web', ua: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36' },
+    { client: 'mweb', ua: 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36' },
+    { client: 'ios', ua: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1' },
+    { client: 'default', ua: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36', noClientArg: true }
   ];
 
-  return profiles.map(({ client, ua }) => ({
+  return profiles.map(({ client, ua, noClientArg }) => ({
     label: `yt-dlp-${client}`,
     cmd: baseCmd,
-    extraArgs: [...baseExtra, ...getExtractorArgs(client), '--user-agent', ua],
+    extraArgs: noClientArg
+      ? [...baseExtra, '--user-agent', ua]
+      : [...baseExtra, ...getExtractorArgs(client), '--user-agent', ua],
     env: envWithPkg
   }));
 }
@@ -808,7 +812,7 @@ app.get('/api/info', async (req, res) => {
     '-4',
     '--dump-single-json',
     '--remote-components', 'ejs:github',
-    '--js-runtimes', 'node',
+    '--js-runtimes', JS_RUNTIME_ARG,
     '--geo-bypass',
     '--geo-bypass-country', 'US',
     '--no-check-certificates',
@@ -944,6 +948,83 @@ app.get('/api/playlist', async (req, res) => {
   });
 });
 
+// High-availability Public Invidious / Piped CDN Stream Fallback
+async function fetchPublicCdnAudioUrl(urlOrId) {
+  let videoId = urlOrId;
+  const vMatch = (urlOrId || '').match(/(?:v=|\/v\/|youtu\.be\/|\/shorts\/)([a-zA-Z0-9_-]{11})/);
+  if (vMatch) videoId = vMatch[1];
+  if (!videoId || videoId.length !== 11) return null;
+
+  console.log(`[Fallback CDN API] Querying public nodes for Video ID: ${videoId}`);
+
+  const pipedInstances = [
+    'https://pipedapi.kavin.rocks',
+    'https://api.piped.privacydev.net',
+    'https://pipedapi.adminforge.de',
+    'https://pipedapi.tokhmi.xyz'
+  ];
+
+  for (const domain of pipedInstances) {
+    try {
+      const data = await new Promise((resolve) => {
+        const req = https.get(`${domain}/streams/${videoId}`, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+          timeout: 4000
+        }, res => {
+          let body = '';
+          res.on('data', chunk => body += chunk);
+          res.on('end', () => {
+            try { resolve(JSON.parse(body)); } catch (e) { resolve(null); }
+          });
+        });
+        req.on('error', () => resolve(null));
+        req.on('timeout', () => { req.destroy(); resolve(null); });
+      });
+
+      if (data && data.audioStreams && data.audioStreams.length > 0) {
+        console.log(`✅ [Fallback CDN API] Piped (${domain}) Audio Stream Found!`);
+        return data.audioStreams[0].url;
+      }
+    } catch (e) {}
+  }
+
+  const invidiousInstances = [
+    'https://inv.tux.pizza',
+    'https://invidious.nerdvpn.de',
+    'https://invidious.drgns.space',
+    'https://invidious.privacydev.net'
+  ];
+
+  for (const domain of invidiousInstances) {
+    try {
+      const data = await new Promise((resolve) => {
+        const req = https.get(`${domain}/api/v1/videos/${videoId}`, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+          timeout: 4000
+        }, res => {
+          let body = '';
+          res.on('data', chunk => body += chunk);
+          res.on('end', () => {
+            try { resolve(JSON.parse(body)); } catch (e) { resolve(null); }
+          });
+        });
+        req.on('error', () => resolve(null));
+        req.on('timeout', () => { req.destroy(); resolve(null); });
+      });
+
+      if (data && data.adaptiveFormats) {
+        const audio = data.adaptiveFormats.find(f => f.type && f.type.includes('audio'));
+        if (audio && audio.url) {
+          console.log(`✅ [Fallback CDN API] Invidious (${domain}) Audio Stream Found!`);
+          return audio.url;
+        }
+      }
+    } catch (e) {}
+  }
+
+  return null;
+}
+
 // Stream Download Handler API (INSTANT HEADERS & DIRECT FFMPEG AUDIO FILTER PIPE)
 app.get('/api/download', (req, res) => {
   const { url, type, quality, speed, title } = req.query;
@@ -1014,8 +1095,60 @@ app.get('/api/download', (req, res) => {
 
     // ⚡ Direct Instant Piping Engine (yt-dlp stdout -> FFmpeg -> HTTP Response)
     // 0-second disk latency, 3-second instant stream start, zero timeout errors!
-    function tryDirectPipe(index) {
+    // ⚡ Direct Instant Piping Engine (yt-dlp stdout -> FFmpeg -> HTTP Response)
+    // 0-second disk latency, 3-second instant stream start, zero timeout errors!
+    async function tryDirectPipe(index, currentUrl = targetDownloadUrl, isSearchRetry = false) {
       if (index >= commands.length) {
+        // Fallback Step 1: Retry via ytsearch1 if URL has video ID and not retried yet
+        const vMatch = cleanUrl.match(/(?:v=|\/v\/|youtu\.be\/|\/shorts\/)([a-zA-Z0-9_-]{11})/);
+        if (!isSearchRetry && vMatch && vMatch[1]) {
+          console.log(`[tryDirectPipe] Direct URL failed all profiles. Retrying via search query ytsearch1:${vMatch[1]}...`);
+          return tryDirectPipe(0, `ytsearch1:${vMatch[1]}`, true);
+        }
+
+        // Fallback Step 2: Query public CDN API for direct audio stream URL and pipe with FFmpeg
+        console.log(`[tryDirectPipe] Attempting Public CDN Stream Fallback for: ${cleanUrl}`);
+        const cdnAudioUrl = await fetchPublicCdnAudioUrl(cleanUrl);
+        if (cdnAudioUrl) {
+          console.log(`[tryDirectPipe CDN Fallback] Piping public CDN stream directly to FFmpeg...`);
+          let ffmpegArgs = ['-y', '-i', cdnAudioUrl, '-vn', '-acodec', 'libmp3lame'];
+          if (audioQualityArg === '0') ffmpegArgs.push('-q:a', '0');
+          else if (audioQualityArg === '5') ffmpegArgs.push('-q:a', '5');
+          else ffmpegArgs.push('-q:a', '2');
+          if (afFilter) ffmpegArgs.push('-af', afFilter);
+          ffmpegArgs.push('-f', 'mp3', 'pipe:1');
+
+          const ffmpegCmd = hasFfmpeg ? FFMPEG_BIN : 'ffmpeg';
+          let ff;
+          try {
+            ff = spawn(ffmpegCmd, ffmpegArgs);
+          } catch (e) {
+            console.error('[CDN Fallback] FFmpeg spawn error:', e.message);
+          }
+
+          if (ff) {
+            let bytesWritten = 0;
+            let headersSentLocal = false;
+            ff.stdout.on('data', (chunk) => {
+              if (!headersSentLocal && !res.headersSent) {
+                headersSentLocal = true;
+                console.log(`[CDN Fallback] ⚡ Streaming MP3 audio to client!`);
+                res.setHeader('Content-Type', 'audio/mpeg');
+                res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
+                res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, X-Filename');
+                res.setHeader('X-Filename', encodeURIComponent(filename));
+              }
+              bytesWritten += chunk.length;
+              res.write(chunk);
+            });
+            ff.stdout.on('end', () => {
+              if (bytesWritten > 0) return res.end();
+            });
+            req.on('close', () => { try { ff.kill('SIGKILL'); } catch (e) {} });
+            return;
+          }
+        }
+
         console.error(`❌ All direct audio extraction strategies failed for: ${cleanUrl}`);
         if (!res.headersSent) {
           res.setHeader('Content-Type', 'application/json');
@@ -1027,7 +1160,7 @@ app.get('/api/download', (req, res) => {
       }
 
       const { cmd, extraArgs, label, env } = commands[index];
-      console.log(`[tryDirectPipe ${label}] Launching direct audio pipe for: ${targetDownloadUrl}`);
+      console.log(`[tryDirectPipe ${label}] Launching direct audio pipe for: ${currentUrl}`);
 
       const playlistHandlingArgs = isPurePlaylist ? ['--playlist-items', '1'] : ['--no-playlist'];
 
@@ -1036,14 +1169,14 @@ app.get('/api/download', (req, res) => {
         '-q',
         '--no-progress',
         '-o', '-',
-        '-f', '251/250/249/140/ba/bestaudio/b/best/18/22',
-        '--js-runtimes', 'node',
+        '-f', 'bestaudio[ext=m4a]/bestaudio[ext=webm]/251/250/249/140/ba/bestaudio/18/22/b/best',
+        '--js-runtimes', JS_RUNTIME_ARG,
         '--geo-bypass',
         '--geo-bypass-country', 'US',
         '--no-check-certificates',
         ...playlistHandlingArgs,
         ...getCookieArgs(),
-        targetDownloadUrl
+        currentUrl
       ];
 
       let ytdlp;
@@ -1054,7 +1187,7 @@ app.get('/api/download', (req, res) => {
         ytdlp = spawn(cmd, [...extraArgs, ...pipeYtArgs], { env: env || process.env });
       } catch (e) {
         console.error(`[tryDirectPipe ${label}] spawn error:`, e.message);
-        return tryDirectPipe(index + 1);
+        return tryDirectPipe(index + 1, currentUrl, isSearchRetry);
       }
 
       let ffmpegArgs = [
@@ -1076,7 +1209,7 @@ app.get('/api/download', (req, res) => {
       } catch (e) {
         console.error(`[tryDirectPipe ${label}] FFmpeg spawn error:`, e.message);
         try { ytdlp.kill('SIGKILL'); } catch (e) {}
-        return tryDirectPipe(index + 1);
+        return tryDirectPipe(index + 1, currentUrl, isSearchRetry);
       }
 
       ytdlp.stdout.pipe(ff.stdin);
@@ -1090,7 +1223,7 @@ app.get('/api/download', (req, res) => {
           try { ytdlp.kill('SIGKILL'); } catch (e) {}
           try { ff.kill('SIGKILL'); } catch (e) {}
           console.error(`[tryDirectPipe ${label}] timed out after 10s with 0 bytes, trying next strategy...`);
-          tryDirectPipe(index + 1);
+          tryDirectPipe(index + 1, currentUrl, isSearchRetry);
         }
       }, 10000);
 
@@ -1114,7 +1247,7 @@ app.get('/api/download', (req, res) => {
           clearTimeout(timer);
           if (bytesWritten === 0) {
             console.error(`[tryDirectPipe ${label}] FFmpeg stream ended with 0 bytes, trying next strategy...`);
-            tryDirectPipe(index + 1);
+            tryDirectPipe(index + 1, currentUrl, isSearchRetry);
           } else {
             res.end();
           }
@@ -1126,7 +1259,7 @@ app.get('/api/download', (req, res) => {
           handled = true;
           clearTimeout(timer);
           try { ff.kill('SIGKILL'); } catch (e) {}
-          tryDirectPipe(index + 1);
+          tryDirectPipe(index + 1, currentUrl, isSearchRetry);
         }
       });
 
@@ -1135,7 +1268,7 @@ app.get('/api/download', (req, res) => {
           handled = true;
           clearTimeout(timer);
           try { ytdlp.kill('SIGKILL'); } catch (e) {}
-          tryDirectPipe(index + 1);
+          tryDirectPipe(index + 1, currentUrl, isSearchRetry);
         }
       });
 
@@ -1163,8 +1296,14 @@ app.get('/api/download', (req, res) => {
     }
   }
 
-  function tryDirectVideoPipe(index) {
+  function tryDirectVideoPipe(index, currentUrl = targetDownloadUrl, isSearchRetry = false) {
     if (index >= commands.length) {
+      const vMatch = cleanUrl.match(/(?:v=|\/v\/|youtu\.be\/|\/shorts\/)([a-zA-Z0-9_-]{11})/);
+      if (!isSearchRetry && vMatch && vMatch[1]) {
+        console.log(`[tryDirectVideoPipe] Direct URL failed all profiles. Retrying via search query ytsearch1:${vMatch[1]}...`);
+        return tryDirectVideoPipe(0, `ytsearch1:${vMatch[1]}`, true);
+      }
+
       console.error(`❌ All video extraction strategies failed for: ${cleanUrl}`);
       if (!res.headersSent) {
         res.setHeader('Content-Type', 'application/json');
@@ -1176,7 +1315,7 @@ app.get('/api/download', (req, res) => {
     }
 
     const { cmd, extraArgs, label, env } = commands[index];
-    console.log(`[tryDirectVideoPipe ${label}] Launching direct video pipe for: ${targetDownloadUrl}`);
+    console.log(`[tryDirectVideoPipe ${label}] Launching direct video pipe for: ${currentUrl}`);
 
     const playlistHandlingArgs = isPurePlaylist ? ['--playlist-items', '1'] : ['--no-playlist'];
 
@@ -1186,13 +1325,13 @@ app.get('/api/download', (req, res) => {
       '--no-progress',
       '-o', '-',
       '-f', formatString,
-      '--js-runtimes', 'node',
+      '--js-runtimes', JS_RUNTIME_ARG,
       '--geo-bypass',
       '--geo-bypass-country', 'US',
       '--no-check-certificates',
       ...playlistHandlingArgs,
       ...getCookieArgs(),
-      targetDownloadUrl
+      currentUrl
     ];
 
     let ytdlp;

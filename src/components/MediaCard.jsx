@@ -114,7 +114,7 @@ export default function MediaCard({ media, onDownload, onPreview, isPro, onOpenP
   };
 
   return (
-    <div className="glass-card" style={{
+    <div className="glass-card media-card-container" style={{
       maxWidth: '920px',
       margin: '0 auto 40px',
       padding: '28px',
@@ -377,7 +377,7 @@ export default function MediaCard({ media, onDownload, onPreview, isPro, onOpenP
               <span>Select {activeTab === 'audio' ? 'Bitrate & Quality' : 'Resolution'}</span>
             </label>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px' }}>
+            <div className="quality-grid-container" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px' }}>
               {formatsList.map((f, i) => {
                 const keyVal = f.bitrate || f.res;
                 const isSelected = selectedQuality === keyVal;

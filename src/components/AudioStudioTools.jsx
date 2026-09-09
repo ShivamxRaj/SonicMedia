@@ -83,7 +83,7 @@ export default function AudioStudioTools({ media, audioSettings, onChangeSetting
         }}>
           Playback Tempo / Pitch Modifier
         </label>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px' }}>
+        <div className="speed-grid-container" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px' }}>
           {speedOptions.map((s, idx) => {
             const isSelected = audioSettings.speed === s.val;
             const isLocked = s.isProOnly && !isPro;

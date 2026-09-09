@@ -40,7 +40,7 @@ export default function HeroSection({ url, setUrl, onAnalyze, loading, error, on
   ];
 
   return (
-    <section style={{
+    <section className="hero-section-container" style={{
       maxWidth: '920px',
       margin: '0 auto',
       padding: '50px 20px 25px',
@@ -63,7 +63,7 @@ export default function HeroSection({ url, setUrl, onAnalyze, loading, error, on
         <span>Universal Social Media Downloader & Converter</span>
       </div>
 
-      <h1 style={{
+      <h1 className="hero-title" style={{
         fontSize: 'clamp(2.4rem, 5.5vw, 3.8rem)',
         fontWeight: 900,
         lineHeight: 1.15,
@@ -73,7 +73,7 @@ export default function HeroSection({ url, setUrl, onAnalyze, loading, error, on
         <span className="text-gradient">MP3 320kbps & 4K Video</span>
       </h1>
 
-      <p style={{
+      <p className="hero-description" style={{
         fontSize: '1.1rem',
         color: 'var(--text-muted)',
         maxWidth: '640px',
