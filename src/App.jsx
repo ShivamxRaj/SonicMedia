@@ -1,18 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import axios from 'axios';
 import Navbar from './components/Navbar';
 import HeroSection from './components/HeroSection';
 import MediaCard from './components/MediaCard';
-import InAppPlayer from './components/InAppPlayer';
-import DownloadHistory from './components/DownloadHistory';
-import BatchQueueModal from './components/BatchQueueModal';
-import ProSubscriptionModal from './components/ProSubscriptionModal';
-import DeveloperApiPortal from './components/DeveloperApiPortal';
 import FeaturesSection from './components/FeaturesSection';
 import Footer from './components/Footer';
-import TermsModal from './components/TermsModal';
-import PrivacyModal from './components/PrivacyModal';
-import DmcaModal from './components/DmcaModal';
+
+// Code-Splitting Deferred Lazy Loaded Components
+const InAppPlayer = lazy(() => import('./components/InAppPlayer'));
+const DownloadHistory = lazy(() => import('./components/DownloadHistory'));
+const BatchQueueModal = lazy(() => import('./components/BatchQueueModal'));
+const ProSubscriptionModal = lazy(() => import('./components/ProSubscriptionModal'));
+const DeveloperApiPortal = lazy(() => import('./components/DeveloperApiPortal'));
+const TermsModal = lazy(() => import('./components/TermsModal'));
+const PrivacyModal = lazy(() => import('./components/PrivacyModal'));
+const DmcaModal = lazy(() => import('./components/DmcaModal'));
 
 export default function App() {
   const [url, setUrl] = useState('');
@@ -247,11 +249,13 @@ export default function App() {
           onOpenProModal={() => setIsProModalOpen(true)}
         />
 
-        <DownloadHistory
-          history={history}
-          onClearHistory={handleClearHistory}
-          onReDownload={handleDownload}
-        />
+        <Suspense fallback={null}>
+          <DownloadHistory
+            history={history}
+            onClearHistory={handleClearHistory}
+            onReDownload={handleDownload}
+          />
+        </Suspense>
 
         <FeaturesSection />
       </main>
@@ -262,47 +266,49 @@ export default function App() {
         onOpenDmca={() => setIsDmcaOpen(true)}
       />
 
-      {previewMedia && (
-        <InAppPlayer
-          media={previewMedia}
-          onClose={() => setPreviewMedia(null)}
+      <Suspense fallback={null}>
+        {previewMedia && (
+          <InAppPlayer
+            media={previewMedia}
+            onClose={() => setPreviewMedia(null)}
+          />
+        )}
+
+        <BatchQueueModal
+          isOpen={isBatchModalOpen}
+          onClose={() => setIsBatchModalOpen(false)}
+          onProcessBatch={handleDownload}
+          isPro={isPro}
+          onOpenProModal={() => setIsProModalOpen(true)}
         />
-      )}
 
-      <BatchQueueModal
-        isOpen={isBatchModalOpen}
-        onClose={() => setIsBatchModalOpen(false)}
-        onProcessBatch={handleDownload}
-        isPro={isPro}
-        onOpenProModal={() => setIsProModalOpen(true)}
-      />
+        <ProSubscriptionModal
+          isOpen={isProModalOpen}
+          onClose={() => setIsProModalOpen(false)}
+          isPro={isPro}
+          onActivatePro={handleActivatePro}
+        />
 
-      <ProSubscriptionModal
-        isOpen={isProModalOpen}
-        onClose={() => setIsProModalOpen(false)}
-        isPro={isPro}
-        onActivatePro={handleActivatePro}
-      />
+        <DeveloperApiPortal
+          isOpen={isApiModalOpen}
+          onClose={() => setIsApiModalOpen(false)}
+        />
 
-      <DeveloperApiPortal
-        isOpen={isApiModalOpen}
-        onClose={() => setIsApiModalOpen(false)}
-      />
+        <TermsModal
+          isOpen={isTermsOpen}
+          onClose={() => setIsTermsOpen(false)}
+        />
 
-      <TermsModal
-        isOpen={isTermsOpen}
-        onClose={() => setIsTermsOpen(false)}
-      />
+        <PrivacyModal
+          isOpen={isPrivacyOpen}
+          onClose={() => setIsPrivacyOpen(false)}
+        />
 
-      <PrivacyModal
-        isOpen={isPrivacyOpen}
-        onClose={() => setIsPrivacyOpen(false)}
-      />
-
-      <DmcaModal
-        isOpen={isDmcaOpen}
-        onClose={() => setIsDmcaOpen(false)}
-      />
+        <DmcaModal
+          isOpen={isDmcaOpen}
+          onClose={() => setIsDmcaOpen(false)}
+        />
+      </Suspense>
     </div>
   );
 }

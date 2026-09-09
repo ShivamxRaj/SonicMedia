@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import compression from 'compression';
 import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
@@ -17,6 +18,7 @@ process.on('unhandledRejection', (reason) => {
   console.error('⚠️ [CRASH GUARD] Unhandled Rejection:', reason);
 });
 
+app.use(compression());
 app.use(cors());
 app.use(express.json());
 
@@ -226,10 +228,20 @@ app.get('/llms.txt', (req, res) => {
 `);
 });
 
-// Serve Production Frontend Dist static files so http://localhost:5000 ALSO loads the web app!
+// Serve Production Frontend Dist static files with optimized HTTP Cache-Control headers
 const DIST_DIR = path.join(process.cwd(), 'dist');
 if (fs.existsSync(DIST_DIR)) {
-  app.use(express.static(DIST_DIR));
+  app.use(express.static(DIST_DIR, {
+    maxAge: '1y',
+    immutable: true,
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('.html')) {
+        res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+      } else {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      }
+    }
+  }));
 }
 
 const PAYMENTS_FILE = path.join(process.cwd(), 'server', 'payments.json');
