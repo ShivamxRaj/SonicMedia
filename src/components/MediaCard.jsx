@@ -49,42 +49,25 @@ export default function MediaCard({ media, onDownload, onPreview, isPro, onOpenP
     }
 
     setIsDownloading(true);
-    setDownloadProgress(10);
+    setDownloadProgress(25);
     setDownloadSuccess(false);
     setDownloadError(null);
     setStreamedSize('');
 
-    let currentProg = 10;
-    const progressInterval = setInterval(() => {
-      currentProg = Math.min(currentProg + Math.floor(Math.random() * 2) + 1, 98);
-      setDownloadProgress(currentProg);
-    }, 300);
-
     try {
-      const res = await onDownload(
-        {
-          url: media.url,
-          type: activeTab,
-          quality: selectedQuality,
-          speed: activeTab === 'audio' ? (audioSettings.speed || '1.0x') : '1.0x',
-          title: audioSettings.customTitle || media.title,
-          uploader: audioSettings.customArtist || media.uploader,
-          formatLabel: currentFormat.label,
-          audioSettings: activeTab === 'audio' ? audioSettings : null
-        },
-        (realPercent, mbStr, bytes) => {
-          if (mbStr) setStreamedSize(mbStr);
-          if (realPercent !== null && realPercent !== undefined) {
-            setDownloadProgress(Math.max(realPercent, currentProg));
-          } else if (bytes && bytes > 0) {
-            const dynamicPercent = Math.min(98, Math.floor(20 + (bytes / (3 * 1024 * 1024)) * 78));
-            currentProg = Math.max(currentProg, dynamicPercent);
-            setDownloadProgress(currentProg);
-          }
-        }
-      );
+      setDownloadProgress(65);
+      
+      const res = await onDownload({
+        url: media.url,
+        type: activeTab,
+        quality: selectedQuality,
+        speed: activeTab === 'audio' ? (audioSettings.speed || '1.0x') : '1.0x',
+        title: audioSettings.customTitle || media.title,
+        uploader: audioSettings.customArtist || media.uploader,
+        formatLabel: currentFormat.label,
+        audioSettings: activeTab === 'audio' ? audioSettings : null
+      });
 
-      clearInterval(progressInterval);
       if (res && res.success !== false) {
         setDownloadProgress(100);
         setDownloadSuccess(true);
@@ -99,17 +82,17 @@ export default function MediaCard({ media, onDownload, onPreview, isPro, onOpenP
         if (res && res.error) {
           setDownloadError(res.error);
         } else {
-          setDownloadError('⚠️ Download failed. YouTube link may be protected or restricted.');
+          setDownloadError('⚠️ Download failed. Please try again.');
         }
       }
     } catch (err) {
-      clearInterval(progressInterval);
       setDownloadProgress(0);
       setStreamedSize('');
       setDownloadError('⚠️ An error occurred while processing the download.');
     } finally {
-      clearInterval(progressInterval);
-      setIsDownloading(false);
+      setTimeout(() => {
+        setIsDownloading(false);
+      }, 600);
     }
   };
 

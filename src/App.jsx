@@ -125,96 +125,48 @@ export default function App() {
     }
   };
 
-  // Safe Browser File Download Engine with content-type & stream progress validation
-  const handleDownload = async (item, onProgress) => {
+  // ⚡ Direct Instant 0-Latency Native Browser Download Engine
+  const handleDownload = async (item) => {
     const speedParam = item.speed && item.speed !== '1.0x' ? `&speed=${encodeURIComponent(item.speed)}` : '';
     const safeTitle = (item.title || 'sonicmedia-download')
       .replace(/#/g, '')
       .replace(/[^a-zA-Z0-9_\-\s.]/g, '_')
       .replace(/\s+/g, ' ')
       .trim();
+
+    const ext = item.type === 'audio' ? 'mp3' : 'mp4';
     const downloadTarget = `/api/download?url=${encodeURIComponent(item.url)}&type=${item.type}&quality=${item.quality || '256k'}${speedParam}&title=${encodeURIComponent(safeTitle)}`;
-    
-    try {
-      const res = await fetch(downloadTarget);
-      const contentType = res.headers.get('content-type') || '';
 
-      if (!res.ok || contentType.includes('application/json') || contentType.includes('text/plain') || contentType.includes('text/html')) {
-        let errorMsg = '⚠️ Could not download file. YouTube stream may be protected or restricted.';
-        try {
-          const text = await res.text();
-          if (text.startsWith('{')) {
-            const json = JSON.parse(text);
-            if (json.error) errorMsg = json.error;
-          } else if (text.trim()) {
-            errorMsg = text.replace(/^[❌⚠️\s]+/, '⚠️ ');
-          }
-        } catch (e) {}
+    // Trigger instant native browser download stream
+    const link = document.createElement('a');
+    link.href = downloadTarget;
+    link.setAttribute('download', `${safeTitle}.${ext}`);
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
 
-        if (errorMsg.includes('cookies.txt') || errorMsg.includes('restricted cloud IP')) {
-          errorMsg = '⚠️ YouTube restricted cloud streaming for this link. Please try again or try another video link.';
-        }
+    setTimeout(() => {
+      try { document.body.removeChild(link); } catch (e) {}
+    }, 1000);
 
-        return { success: false, error: errorMsg };
-      }
+    // Save to local download history
+    const historyItem = {
+      id: Date.now(),
+      title: item.title || 'SonicMedia Track',
+      url: item.url,
+      type: item.type,
+      quality: item.quality || '256k',
+      speed: item.speed || '1.0x',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
 
-      const contentLength = res.headers.get('content-length');
-      const totalBytes = contentLength ? parseInt(contentLength, 10) : 0;
-      let receivedBytes = 0;
+    setHistory(prev => {
+      const updated = [historyItem, ...prev.filter(h => h.url !== item.url).slice(0, 19)];
+      try { localStorage.setItem('sonicmedia_history', JSON.stringify(updated)); } catch (e) {}
+      return updated;
+    });
 
-      const reader = res.body.getReader();
-      const chunks = [];
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        chunks.push(value);
-        receivedBytes += value.length;
-
-        if (typeof onProgress === 'function') {
-          const mbStr = (receivedBytes / (1024 * 1024)).toFixed(1) + ' MB';
-          if (totalBytes > 0) {
-            const percent = Math.min(Math.round((receivedBytes / totalBytes) * 100), 99);
-            onProgress(percent, mbStr);
-          } else {
-            onProgress(null, mbStr, receivedBytes);
-          }
-        }
-      }
-
-      const blob = new Blob(chunks, { type: contentType.split(';')[0] || (item.type === 'audio' ? 'audio/mpeg' : 'video/mp4') });
-      const blobUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = blobUrl;
-      const safeTitle = (item.title || 'sonicmedia-download').replace(/[^a-zA-Z0-9_\-\s.]/g, '_').replace(/\s+/g, ' ').trim();
-      const ext = item.type === 'audio' ? 'mp3' : 'mp4';
-      link.setAttribute('download', `${safeTitle}.${ext}`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(blobUrl);
-
-      if (typeof onProgress === 'function') onProgress(100);
-
-      const historyItem = {
-        title: item.title,
-        uploader: item.uploader,
-        url: item.url,
-        type: item.type,
-        quality: item.quality,
-        speed: item.speed || '1.0x',
-        formatLabel: item.formatLabel,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      };
-
-      // ⚡ Keep max 3 recent download items only! Older items automatically disappear
-      const updated = [historyItem, ...history.filter(h => h.url !== item.url || h.quality !== item.quality)].slice(0, 3);
-      saveHistory(updated);
-      return { success: true };
-    } catch (err) {
-      console.error('Download error:', err);
-      return { success: false, error: '⚠️ Network error while downloading file. Please try again.' };
-    }
+    return { success: true };
   };
 
   const handleClearHistory = () => {
