@@ -125,8 +125,13 @@ export default function App() {
 
   // Safe Browser File Download Engine with content-type & stream progress validation
   const handleDownload = async (item, onProgress) => {
-    const speedParam = item.speed ? `&speed=${encodeURIComponent(item.speed)}` : '';
-    const downloadTarget = item.download_url || `/api/download?url=${encodeURIComponent(item.url)}&type=${item.type}&quality=${item.quality}${speedParam}&title=${encodeURIComponent(item.title)}`;
+    const speedParam = item.speed && item.speed !== '1.0x' ? `&speed=${encodeURIComponent(item.speed)}` : '';
+    const safeTitle = (item.title || 'sonicmedia-download')
+      .replace(/#/g, '')
+      .replace(/[^a-zA-Z0-9_\-\s.]/g, '_')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const downloadTarget = `/api/download?url=${encodeURIComponent(item.url)}&type=${item.type}&quality=${item.quality || '256k'}${speedParam}&title=${encodeURIComponent(safeTitle)}`;
     
     try {
       const res = await fetch(downloadTarget);

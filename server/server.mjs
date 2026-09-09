@@ -136,14 +136,30 @@ function getCommands() {
     { client: 'default', ua: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36', noClientArg: true }
   ];
 
-  return profiles.map(({ client, ua, noClientArg }) => ({
-    label: `yt-dlp-${client}`,
-    cmd: baseCmd,
-    extraArgs: noClientArg
-      ? [...baseExtra, '--user-agent', ua]
-      : [...baseExtra, ...getExtractorArgs(client), '--user-agent', ua],
-    env: envWithPkg
-  }));
+  const commandsList = [];
+  profiles.forEach(({ client, ua, noClientArg }) => {
+    const extra = noClientArg
+      ? ['--user-agent', ua]
+      : [...getExtractorArgs(client), '--user-agent', ua];
+
+    commandsList.push({
+      label: `yt-dlp-${client}`,
+      cmd: baseCmd,
+      extraArgs: [...baseExtra, ...extra],
+      env: envWithPkg
+    });
+
+    if (baseCmd !== 'python3') {
+      commandsList.push({
+        label: `python3-${client}`,
+        cmd: 'python3',
+        extraArgs: ['-m', 'yt_dlp', ...extra],
+        env: envWithPkg
+      });
+    }
+  });
+
+  return commandsList;
 }
 
 // Dynamic Sitemap.xml endpoint for Googlebot Indexer
@@ -853,16 +869,16 @@ app.get('/api/info', async (req, res) => {
         views: info.view_count ? info.view_count.toLocaleString() : 'N/A',
         formats: {
           audio: [
-            { label: 'MP3 Ultra HD (320 kbps)', bitrate: '320k', size: '~8.5 MB', format_id: 'mp3-320', download_url: `/api/download?url=${urlEnc}&type=audio&quality=320k&title=${titleEnc}` },
-            { label: 'MP3 High Quality (256 kbps)', bitrate: '256k', size: '~6.2 MB', format_id: 'mp3-256', download_url: `/api/download?url=${urlEnc}&type=audio&quality=256k&title=${titleEnc}` },
-            { label: 'MP3 Standard (128 kbps)', bitrate: '128k', size: '~3.4 MB', format_id: 'mp3-128', download_url: `/api/download?url=${urlEnc}&type=audio&quality=128k&title=${titleEnc}` },
-            { label: 'M4A Original Stream', bitrate: 'm4a', size: '~5.1 MB', format_id: 'm4a-orig', download_url: `/api/download?url=${urlEnc}&type=audio&quality=m4a&title=${titleEnc}` }
+            { label: 'MP3 Ultra HD (320 kbps)', bitrate: '320k', size: '~8.5 MB', format_id: 'mp3-320' },
+            { label: 'MP3 High Quality (256 kbps)', bitrate: '256k', size: '~6.2 MB', format_id: 'mp3-256' },
+            { label: 'MP3 Standard (128 kbps)', bitrate: '128k', size: '~3.4 MB', format_id: 'mp3-128' },
+            { label: 'M4A Original Stream', bitrate: 'm4a', size: '~5.1 MB', format_id: 'm4a-orig' }
           ],
           video: [
-            { label: 'MP4 4K Ultra HD (2160p 4K Master)', res: '2160p', size: '~250–600 MB', format_id: 'mp4-4k', download_url: `/api/download?url=${urlEnc}&type=video&quality=2160p&title=${titleEnc}` },
-            { label: 'MP4 Full HD (1080p Crisp Master)', res: '1080p', size: '~80–120 MB', format_id: 'mp4-1080', download_url: `/api/download?url=${urlEnc}&type=video&quality=1080p&title=${titleEnc}` },
-            { label: 'MP4 HD (720p Standard HD)', res: '720p', size: '~30–50 MB', format_id: 'mp4-720', download_url: `/api/download?url=${urlEnc}&type=video&quality=720p&title=${titleEnc}` },
-            { label: 'MP4 SD (480p Mobile Quality)', res: '480p', size: '~15–25 MB', format_id: 'mp4-480', download_url: `/api/download?url=${urlEnc}&type=video&quality=480p&title=${titleEnc}` }
+            { label: 'MP4 4K Ultra HD (2160p 4K Master)', res: '2160p', size: '~250–600 MB', format_id: 'mp4-4k' },
+            { label: 'MP4 Full HD (1080p Crisp Master)', res: '1080p', size: '~80–120 MB', format_id: 'mp4-1080' },
+            { label: 'MP4 HD (720p Standard HD)', res: '720p', size: '~30–50 MB', format_id: 'mp4-720' },
+            { label: 'MP4 SD (480p Mobile Quality)', res: '480p', size: '~15–25 MB', format_id: 'mp4-480' }
           ]
         }
       };
