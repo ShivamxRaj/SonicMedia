@@ -49,14 +49,12 @@ export default function MediaCard({ media, onDownload, onPreview, isPro, onOpenP
     }
 
     setIsDownloading(true);
-    setDownloadProgress(25);
+    setDownloadProgress(10);
     setDownloadSuccess(false);
     setDownloadError(null);
     setStreamedSize('');
 
     try {
-      setDownloadProgress(65);
-      
       const res = await onDownload({
         url: media.url,
         type: activeTab,
@@ -66,6 +64,9 @@ export default function MediaCard({ media, onDownload, onPreview, isPro, onOpenP
         uploader: audioSettings.customArtist || media.uploader,
         formatLabel: currentFormat.label,
         audioSettings: activeTab === 'audio' ? audioSettings : null
+      }, (percent, sizeStr) => {
+        setDownloadProgress(percent);
+        if (sizeStr) setStreamedSize(sizeStr);
       });
 
       if (res && res.success !== false) {

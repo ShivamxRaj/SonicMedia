@@ -125,8 +125,8 @@ export default function App() {
     }
   };
 
-  // ⚡ Direct Instant 0-Latency Native Browser Download Engine
-  const handleDownload = async (item) => {
+  // ⚡ Direct Real-Time Streaming Download Engine with Live Progress
+  const handleDownload = async (item, onProgress) => {
     const speedParam = item.speed && item.speed !== '1.0x' ? `&speed=${encodeURIComponent(item.speed)}` : '';
     const safeTitle = (item.title || 'sonicmedia-download')
       .replace(/#/g, '')
@@ -137,36 +137,79 @@ export default function App() {
     const ext = item.type === 'audio' ? 'mp3' : 'mp4';
     const downloadTarget = `/api/download?url=${encodeURIComponent(item.url)}&type=${item.type}&quality=${item.quality || '256k'}${speedParam}&title=${encodeURIComponent(safeTitle)}`;
 
-    // Trigger instant native browser download stream
-    const link = document.createElement('a');
-    link.href = downloadTarget;
-    link.setAttribute('download', `${safeTitle}.${ext}`);
-    link.style.display = 'none';
-    document.body.appendChild(link);
-    link.click();
+    try {
+      if (onProgress) onProgress(15, '0.5 MB');
 
-    setTimeout(() => {
-      try { document.body.removeChild(link); } catch (e) {}
-    }, 1000);
+      const response = await axios.get(downloadTarget, {
+        responseType: 'blob',
+        onDownloadProgress: (progressEvent) => {
+          if (progressEvent.total) {
+            const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            const mb = (progressEvent.loaded / (1024 * 1024)).toFixed(1);
+            if (onProgress) onProgress(Math.min(99, percentCompleted), `${mb} MB`);
+          } else {
+            const loadedMB = (progressEvent.loaded / (1024 * 1024)).toFixed(1);
+            const estimatedPercent = Math.min(95, Math.round(15 + (progressEvent.loaded / 100000)));
+            if (onProgress) onProgress(estimatedPercent, `${loadedMB} MB`);
+          }
+        }
+      });
 
-    // Save to local download history
-    const historyItem = {
-      id: Date.now(),
-      title: item.title || 'SonicMedia Track',
-      url: item.url,
-      type: item.type,
-      quality: item.quality || '256k',
-      speed: item.speed || '1.0x',
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    };
+      if (onProgress) onProgress(100, '');
 
-    setHistory(prev => {
-      const updated = [historyItem, ...prev.filter(h => h.url !== item.url).slice(0, 19)];
-      try { localStorage.setItem('sonicmedia_history', JSON.stringify(updated)); } catch (e) {}
-      return updated;
-    });
+      // Trigger native browser download save dialog with actual file blob
+      const blob = new Blob([response.data], { type: item.type === 'audio' ? 'audio/mpeg' : 'video/mp4' });
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.setAttribute('download', `${safeTitle}.${ext}`);
+      document.body.appendChild(link);
+      link.click();
+      setTimeout(() => {
+        try {
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(blobUrl);
+        } catch (e) {}
+      }, 1000);
 
-    return { success: true };
+      // Save to local download history
+      const historyItem = {
+        id: Date.now(),
+        title: item.title || 'SonicMedia Track',
+        url: item.url,
+        type: item.type,
+        quality: item.quality || '256k',
+        speed: item.speed || '1.0x',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+
+      setHistory(prev => {
+        const updated = [historyItem, ...prev.filter(h => h.url !== item.url).slice(0, 19)];
+        try { localStorage.setItem('sonicmedia_history', JSON.stringify(updated)); } catch (e) {}
+        return updated;
+      });
+
+      return { success: true };
+    } catch (err) {
+      console.error('Download Error:', err);
+      let errorMsg = '⚠️ Download failed. Please try again.';
+      if (err.response && err.response.data) {
+        try {
+          if (err.response.data instanceof Blob) {
+            const text = await err.response.data.text();
+            try {
+              const json = JSON.parse(text);
+              if (json.error) errorMsg = json.error;
+            } catch (e) {
+              if (text && text.length < 200) errorMsg = text;
+            }
+          } else if (err.response.data.error) {
+            errorMsg = err.response.data.error;
+          }
+        } catch (e) {}
+      }
+      return { success: false, error: errorMsg };
+    }
   };
 
   const handleClearHistory = () => {
