@@ -22,6 +22,15 @@ app.use(compression());
 app.use(cors());
 app.use(express.json());
 
+// WWW to Apex Domain 301 HTTPS SSL Redirect Middleware
+app.use((req, res, next) => {
+  const host = req.headers.host || '';
+  if (host.toLowerCase().startsWith('www.')) {
+    return res.redirect(301, `https://sonicmedia.me${req.url}`);
+  }
+  next();
+});
+
 const YTDLP_BIN = path.join(process.cwd(), 'server', process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
 const YTDLP_TMP = path.join(process.cwd(), 'server', process.platform === 'win32' ? 'yt-dlp.tmp.exe' : 'yt-dlp.tmp');
 const YTDLP_PKG = path.join(process.cwd(), 'server', 'yt_pkg');
