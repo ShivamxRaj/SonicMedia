@@ -142,6 +142,50 @@ export default function FeaturesSection() {
         })}
       </div>
 
+      {/* High-Converting SEO Body Text & Headings Section for RelateSEO & Rank #1 */}
+      <div className="glass-card" style={{
+        padding: '36px',
+        background: 'rgba(12, 14, 22, 0.6)',
+        border: '1px solid rgba(255, 255, 255, 0.07)',
+        marginBottom: '60px',
+        textAlign: 'left'
+      }}>
+        <h1 style={{ fontSize: '1.8rem', fontWeight: 900, marginBottom: '16px', color: '#fff' }}>
+          Effortless <span className="text-gradient">YouTube to MP3</span> & 4K <span className="text-gradient">Video Downloader</span>
+        </h1>
+        
+        <p style={{ fontSize: '0.95rem', color: 'var(--text-muted)', lineHeight: 1.7, marginBottom: '24px' }}>
+          SonicMedia offers a premier suite for media conversion. Instantly convert videos to studio-quality audio, customize ID3 metadata tags, or download 4K videos. Our service is the ideal <strong>video downloader</strong> for content from YouTube, Instagram Reels, TikTok, Twitter/X, and SoundCloud.
+        </p>
+
+        <h2 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#38bdf8', marginBottom: '14px' }}>
+          Why SonicMedia is Your Premier Video Downloader
+        </h2>
+        
+        <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', lineHeight: 1.65, marginBottom: '20px' }}>
+          Our platform is engineered for exceptional speed, studio-fidelity audio, and seamless high-definition video extraction. Experience the best online media conversion available.
+        </p>
+
+        <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <li style={{ fontSize: '0.9rem', color: '#e2e8f0', lineHeight: 1.6 }}>
+            <strong style={{ color: '#c084fc' }}>Studio Quality Audio:</strong> Extract pristine MP3, WAV, and FLAC audio streams at a full 320kbps for crystal-clear sound. Our <strong>youtube to mp3</strong> tool ensures the highest fidelity.
+          </li>
+          <li style={{ fontSize: '0.9rem', color: '#e2e8f0', lineHeight: 1.6 }}>
+            <strong style={{ color: '#38bdf8' }}>Ultra HD Video:</strong> Download videos in resolutions up to 4K 2160p with high frame rates, preserving original audio tracks and HDR color grading. This makes us a superior <strong>video downloader</strong> choice.
+          </li>
+          <li style={{ fontSize: '0.9rem', color: '#ec4899' }}>
+            <strong style={{ color: '#ec4899' }}>Broad Platform Support:</strong> We support over 1000 platforms, including YouTube, Facebook, and a high-quality <strong>instagram reels downloader</strong>. We also handle TikTok without watermarks.
+          </li>
+        </ul>
+
+        <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#a855f7', marginBottom: '12px' }}>
+          Seamless Instagram Reels Downloader and More
+        </h2>
+        <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', lineHeight: 1.65 }}>
+          No registration, no pop-up ads, and no malware. We provide pure, high-speed media conversion directly within your browser. Enjoy fast 320kbps MP3 audio downloads, 4K video saving, and instant Instagram Reels sound extraction.
+        </p>
+      </div>
+
 
 
       {/* SEO Interactive FAQ Accordions */}
