@@ -129,6 +129,30 @@ setInterval(() => ensureYtDlpBinary(true), 24 * 60 * 60 * 1000);
 
 const JS_RUNTIME_ARG = process.execPath ? `node:${process.execPath}` : 'node';
 
+// 🌐 Dynamic Proxy Rotator Pool & IPv6 Engine
+let globalProxyIndex = 0;
+function getProxyArgs() {
+  const proxyListStr = process.env.PROXY_LIST || process.env.HTTP_PROXY || process.env.HTTPS_PROXY || '';
+  const proxies = proxyListStr.split(',').map(p => p.trim()).filter(Boolean);
+
+  const proxyArgs = [];
+  if (proxies.length > 0) {
+    const currentProxy = proxies[globalProxyIndex % proxies.length];
+    globalProxyIndex = (globalProxyIndex + 1) % proxies.length;
+    proxyArgs.push('--proxy', currentProxy);
+    const safeProxy = currentProxy.replace(/:[^:@]+@/, ':****@');
+    console.log(`[ProxyRotator] Selected proxy #${globalProxyIndex}/${proxies.length}: ${safeProxy}`);
+  }
+
+  if (process.env.FORCE_IPV6 === 'true') {
+    proxyArgs.push('--force-ipv6');
+  } else if (process.env.SOURCE_ADDRESS) {
+    proxyArgs.push('--source-address', process.env.SOURCE_ADDRESS);
+  }
+
+  return proxyArgs;
+}
+
 // Dynamically return valid yt-dlp commands across cascading player client fallback strategies
 function getCommands() {
   const homeBin = path.join(process.env.HOME || '/root', '.local', 'bin', 'yt-dlp');
@@ -155,6 +179,8 @@ function getCommands() {
     baseExtra = [];
   }
 
+  const proxyArgs = getProxyArgs();
+
   const profiles = [
     { client: 'android', ua: 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36' },
     { client: 'web', ua: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36' },
@@ -166,8 +192,8 @@ function getCommands() {
   const commandsList = [];
   profiles.forEach(({ client, ua, noClientArg }) => {
     const extra = noClientArg
-      ? ['--user-agent', ua]
-      : [...getExtractorArgs(client), '--user-agent', ua];
+      ? ['--user-agent', ua, ...proxyArgs]
+      : [...getExtractorArgs(client), '--user-agent', ua, ...proxyArgs];
 
     commandsList.push({
       label: `yt-dlp-${client}`,
@@ -188,6 +214,22 @@ function getCommands() {
 
   return commandsList;
 }
+
+// Debug & Status endpoint for Proxy Pool & Scalability Engine
+app.get('/api/proxy-status', (req, res) => {
+  const proxyListStr = process.env.PROXY_LIST || process.env.HTTP_PROXY || process.env.HTTPS_PROXY || '';
+  const proxies = proxyListStr.split(',').map(p => p.trim()).filter(Boolean);
+  const safeProxies = proxies.map(p => p.replace(/:[^:@]+@/, ':****@'));
+
+  res.json({
+    status: 'online',
+    proxy_count: proxies.length,
+    active_proxies: safeProxies,
+    ipv6_forced: process.env.FORCE_IPV6 === 'true',
+    source_address: process.env.SOURCE_ADDRESS || null,
+    global_proxy_index: globalProxyIndex
+  });
+});
 
 // Dynamic Sitemap.xml endpoint for Googlebot Indexer
 app.get('/sitemap.xml', (req, res) => {
