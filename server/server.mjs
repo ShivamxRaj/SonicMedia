@@ -268,8 +268,10 @@ function getProxyArgs() {
   return proxyArgs;
 }
 
-// Dynamically return valid yt-dlp commands across cascading player client fallback strategies
-function getCommands() {
+// Dynamically return valid yt-dlp commands across cascading player client fallback strategies.
+// useProxy=true: inject proxy args (for info/metadata fetching to bypass rate-limits)
+// useProxy=false (default for streaming): direct connection to YouTube CDN for fast, unthrottled streams
+function getCommands(useProxy = false) {
   const homeBin = path.join(process.env.HOME || '/root', '.local', 'bin', 'yt-dlp');
   const nodeModulesBin = path.join(process.cwd(), 'node_modules', 'yt-dlp-exec', 'bin', process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
 
@@ -294,7 +296,8 @@ function getCommands() {
     baseExtra = [];
   }
 
-  const proxyArgs = getProxyArgs();
+  // Only inject proxy for info/metadata fetching. Streaming goes direct to YouTube CDN.
+  const proxyArgs = useProxy ? getProxyArgs() : [];
 
   const profiles = [
     { client: 'android', ua: 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36' },
@@ -586,8 +589,9 @@ function answerTelegramCallback(callbackQueryId, text) {
 pollTelegramUpdates();
 
 // Direct non-blocking execution strategy list with dynamic filesystem existence checks
+// useProxy=true: metadata/info fetching uses proxy rotation to bypass Azure datacenter rate-limits
 function runYtDlp(args, callback) {
-  const commands = getCommands();
+  const commands = getCommands(true); // Info fetching uses proxy
 
   function tryCommand(index) {
     if (index >= commands.length) {
@@ -1385,7 +1389,7 @@ app.get('/api/download', (req, res) => {
 
   console.log(`[API /download] Direct Media Stream Request for [${type} - ${quality || 'best'} - speed ${speed || '1.0x'}]: ${targetDownloadUrl} -> ${filename}`);
 
-  const commands = getCommands();
+  const commands = getCommands(false); // Streaming: direct connection to YouTube CDN, no proxy throttling
   const FFMPEG_BIN = path.join(process.cwd(), 'node_modules', 'ffmpeg-static', process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg');
   const hasFfmpeg = fs.existsSync(FFMPEG_BIN);
   if (hasFfmpeg && process.platform !== 'win32') {
