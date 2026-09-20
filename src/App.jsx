@@ -138,20 +138,32 @@ export default function App() {
     const durSec = media && media.duration_seconds > 0 ? media.duration_seconds : 0;
     const downloadTarget = `/api/download?url=${encodeURIComponent(item.url)}&type=${item.type}&quality=${item.quality || '256k'}${speedParam}&title=${encodeURIComponent(safeTitle)}&dur=${durSec}`;
 
-    // === Phase 1: Warming (0% → 15%) — smooth animation while server connects ===
+    // === Phase 1: Non-Freezing Asymptotic Pre-Chunk Crawler ===
+    // Smoothly advances progress continuously (0% -> 15% -> 30% -> 40%+) while Azure connects to YouTube
     let currentProgress = 0;
-    const warmingTarget = 15;
-    if (onProgress) onProgress(currentProgress, '0 MB', 'Connecting...');
+    if (onProgress) onProgress(0, '0 MB', 'Connecting...');
 
     const warmingTimer = setInterval(() => {
-      if (currentProgress < warmingTarget) {
-        currentProgress += 1;
-        if (onProgress) onProgress(currentProgress, '0 MB', 'Connecting...');
+      let increment = 1;
+      if (currentProgress >= 35) {
+        increment = 0.1;
+      } else if (currentProgress >= 25) {
+        increment = 0.25;
+      } else if (currentProgress >= 15) {
+        increment = 0.5;
       }
-    }, 150);
+
+      currentProgress = parseFloat((currentProgress + increment).toFixed(1));
+      const displayVal = Math.min(48, Math.round(currentProgress));
+
+      if (onProgress) {
+        onProgress(displayVal, '0 MB', 'Connecting...');
+      }
+    }, 120);
 
     // === Adaptive tracking state ===
     let firstChunkReceived = false;
+    let baselineProgress = 15;
     let downloadStartTime = 0;
     let lastSpeedCalcTime = 0;
     let lastSpeedCalcBytes = 0;
@@ -165,10 +177,11 @@ export default function App() {
           const loadedBytes = progressEvent.loaded;
           const now = Date.now();
 
-          // First chunk: transition from warming to real tracking
+          // First chunk: transition smoothly from crawler baseline to real byte tracking
           if (!firstChunkReceived) {
             firstChunkReceived = true;
             clearInterval(warmingTimer);
+            baselineProgress = Math.min(45, Math.max(15, Math.round(currentProgress)));
             downloadStartTime = now;
             lastSpeedCalcTime = now;
             lastSpeedCalcBytes = 0;
@@ -177,10 +190,9 @@ export default function App() {
             const serverHint = parseInt(progressEvent.event?.target?.getResponseHeader?.('X-Expected-Size') || '0', 10);
             const axiosTotal = progressEvent.total && progressEvent.total > 0 ? progressEvent.total : 0;
             dynamicTotalEstimate = axiosTotal || serverHint || (5 * 1024 * 1024);
-            currentProgress = warmingTarget;
           }
 
-          // === Phase 2: Real Byte-Flow (15% → 95%) with adaptive estimate ===
+          // === Phase 2: Real Byte-Flow (baseline% → 98%) with adaptive estimate ===
           const elapsedMs = now - downloadStartTime;
           const elapsedSec = elapsedMs / 1000;
 
@@ -190,7 +202,6 @@ export default function App() {
             const timeDelta = (now - lastSpeedCalcTime) / 1000;
             if (timeDelta > 0) {
               const instantSpeed = bytesDelta / timeDelta;
-              // Smooth the speed with a weighted average (70% new, 30% old)
               currentSpeed = currentSpeed > 0 
                 ? (instantSpeed * 0.7) + (currentSpeed * 0.3) 
                 : instantSpeed;
@@ -198,42 +209,35 @@ export default function App() {
             lastSpeedCalcTime = now;
             lastSpeedCalcBytes = loadedBytes;
 
-            // Dynamically recalculate total estimate based on actual throughput
-            // If we have real speed data and it's been > 2 seconds, update estimate
-            if (currentSpeed > 0 && elapsedSec > 2) {
-              // If server provided Content-Length (progressEvent.total), use that
+            // Dynamically adjust total estimate based on actual throughput
+            if (currentSpeed > 0 && elapsedSec > 1.5) {
               if (progressEvent.total && progressEvent.total > 0) {
                 dynamicTotalEstimate = progressEvent.total;
               } else {
-                // Extrapolate: if loaded X bytes in Y seconds at Z speed,
-                // and the download seems to still be flowing, scale estimate up
-                // Only grow the estimate if we're approaching the limit too fast
                 const projectedTotal = loadedBytes * (1 + (0.5 / Math.max(0.1, loadedBytes / dynamicTotalEstimate)));
-                // Ensure estimate never shrinks below what we've already received
                 dynamicTotalEstimate = Math.max(loadedBytes * 1.05, Math.min(projectedTotal, dynamicTotalEstimate * 2));
               }
             }
           }
 
-          // Calculate progress percentage within the 15-95% range
-          let rawPercent = 0;
+          // Map raw byte fraction to our remaining progress span (baselineProgress → 98%)
+          let byteFraction = 0;
           if (progressEvent.total && progressEvent.total > 0) {
-            rawPercent = (loadedBytes / progressEvent.total) * 100;
+            byteFraction = loadedBytes / progressEvent.total;
           } else if (dynamicTotalEstimate > 0) {
-            rawPercent = (loadedBytes / dynamicTotalEstimate) * 100;
+            byteFraction = Math.min(1, loadedBytes / dynamicTotalEstimate);
           }
 
-          // Map raw 0-100% to our 15-95% display range (saving 95-100% for completion)
-          const displayPercent = Math.min(95, Math.max(warmingTarget, warmingTarget + (rawPercent * 0.8)));
-          currentProgress = Math.round(displayPercent);
+          const remainingSpan = 98 - baselineProgress;
+          const displayPercent = Math.min(98, Math.max(baselineProgress, baselineProgress + Math.round(byteFraction * remainingSpan)));
 
           // Format display values
           const mbLoaded = (loadedBytes / (1024 * 1024)).toFixed(1);
           const speedStr = currentSpeed > 0 
             ? `${(currentSpeed / (1024 * 1024)).toFixed(1)} MB/s` 
-            : 'Calculating...';
+            : 'Streaming...';
 
-          if (onProgress) onProgress(currentProgress, `${mbLoaded} MB`, speedStr);
+          if (onProgress) onProgress(displayPercent, `${mbLoaded} MB`, speedStr);
         }
       });
 

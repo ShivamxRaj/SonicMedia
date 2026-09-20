@@ -1300,9 +1300,11 @@ app.get('/api/download', (req, res) => {
                 res.setHeader('Connection', 'keep-alive');
                 res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, X-Filename, X-Expected-Size, X-Content-Duration');
                 res.setHeader('X-Filename', encodeURIComponent(filename));
+                if (typeof res.flushHeaders === 'function') try { res.flushHeaders(); } catch (e) {}
               }
               bytesWritten += chunk.length;
               res.write(chunk);
+              if (typeof res.flush === 'function') try { res.flush(); } catch (e) {}
             });
             ff.stdout.on('end', () => {
               if (bytesWritten > 0) return res.end();
@@ -1405,9 +1407,11 @@ app.get('/api/download', (req, res) => {
           res.setHeader('Connection', 'keep-alive');
           res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, X-Filename, X-Expected-Size, X-Content-Duration');
           res.setHeader('X-Filename', encodeURIComponent(filename));
+          if (typeof res.flushHeaders === 'function') try { res.flushHeaders(); } catch (e) {}
         }
         bytesWritten += chunk.length;
         res.write(chunk);
+        if (typeof res.flush === 'function') try { res.flush(); } catch (e) {}
       });
 
       ff.stdout.on('end', () => {
@@ -1562,9 +1566,11 @@ app.get('/api/download', (req, res) => {
         res.setHeader('Connection', 'keep-alive');
         res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, X-Filename, X-Expected-Size, X-Content-Duration');
         res.setHeader('X-Filename', encodeURIComponent(filename));
+        if (typeof res.flushHeaders === 'function') try { res.flushHeaders(); } catch (e) {}
       }
       bytesWritten += chunk.length;
       res.write(chunk);
+      if (typeof res.flush === 'function') try { res.flush(); } catch (e) {}
     });
 
     ff.stdout.on('end', () => {
