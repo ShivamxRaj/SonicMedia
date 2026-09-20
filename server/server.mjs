@@ -129,19 +129,134 @@ setInterval(() => ensureYtDlpBinary(true), 24 * 60 * 60 * 1000);
 
 const JS_RUNTIME_ARG = process.execPath ? `node:${process.execPath}` : 'node';
 
-// 🌐 Dynamic Proxy Rotator Pool & IPv6 Engine
+// 🌐 Dynamic Proxy Rotator Pool & Auto Free Proxy Scraper Engine
 let globalProxyIndex = 0;
+let liveProxyPool = []; // In-memory pool: merged env + scraped free proxies
+
+// Fetch free proxies from Proxyscrape API
+async function fetchProxyscrapeProxies() {
+  return new Promise((resolve) => {
+    const url = 'https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=8000&country=all&ssl=all&anonymity=elite,anonymous';
+    https.get(url, { timeout: 10000 }, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        const proxies = data.split('\n')
+          .map(p => p.trim())
+          .filter(p => /^\d+\.\d+\.\d+\.\d+:\d+$/.test(p))
+          .map(p => `http://${p}`);
+        console.log(`[ProxyScraper] Proxyscrape: fetched ${proxies.length} free proxies`);
+        resolve(proxies);
+      });
+    }).on('error', (e) => {
+      console.warn('[ProxyScraper] Proxyscrape fetch failed:', e.message);
+      resolve([]);
+    });
+  });
+}
+
+// Fetch free proxies from Geonode API
+async function fetchGeonodeProxies() {
+  return new Promise((resolve) => {
+    const url = 'https://proxylist.geonode.com/api/proxy-list?limit=50&page=1&sort_by=lastChecked&sort_type=desc&protocols=http,https&anonymityLevel=elite,anonymous';
+    https.get(url, { timeout: 10000 }, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try {
+          const json = JSON.parse(data);
+          const proxies = (json.data || [])
+            .filter(p => p.ip && p.port)
+            .map(p => `http://${p.ip}:${p.port}`);
+          console.log(`[ProxyScraper] Geonode: fetched ${proxies.length} free proxies`);
+          resolve(proxies);
+        } catch (e) {
+          console.warn('[ProxyScraper] Geonode parse failed:', e.message);
+          resolve([]);
+        }
+      });
+    }).on('error', (e) => {
+      console.warn('[ProxyScraper] Geonode fetch failed:', e.message);
+      resolve([]);
+    });
+  });
+}
+
+// Validate a proxy by making a quick test request through it (5s timeout)
+function validateProxy(proxyUrl) {
+  return new Promise((resolve) => {
+    try {
+      const proxyMatch = proxyUrl.match(/^http:\/\/(?:([^:@]+):([^@]+)@)?([^:]+):(\d+)/);
+      if (!proxyMatch) return resolve(false);
+      const [, user, pass, host, port] = proxyMatch;
+
+      const connectOpts = { host, port: parseInt(port), method: 'CONNECT', path: 'ipinfo.io:443', timeout: 5000 };
+      if (user && pass) {
+        const b64 = Buffer.from(`${user}:${pass}`).toString('base64');
+        connectOpts.headers = { 'Proxy-Authorization': `Basic ${b64}` };
+      }
+
+      const req = https.request(connectOpts);
+      req.setTimeout(5000, () => { req.destroy(); resolve(false); });
+      req.on('connect', () => { req.destroy(); resolve(true); });
+      req.on('error', () => resolve(false));
+      req.end();
+    } catch {
+      resolve(false);
+    }
+  });
+}
+
+// Build & refresh the live proxy pool: PROXY_LIST env + scraped free proxies (validated)
+async function refreshProxyPool() {
+  console.log('[ProxyPool] Starting proxy pool refresh...');
+
+  // 1. Load env-configured proxies (always trusted, no validation needed)
+  const envStr = process.env.PROXY_LIST || process.env.HTTP_PROXY || process.env.HTTPS_PROXY || '';
+  const envProxies = envStr.split(',').map(p => p.trim()).filter(Boolean);
+
+  // 2. Scrape free proxies from multiple sources in parallel
+  const [proxyscrapeList, geonodeList] = await Promise.all([
+    fetchProxyscrapeProxies(),
+    fetchGeonodeProxies()
+  ]);
+  const scrapedRaw = [...proxyscrapeList, ...geonodeList];
+
+  // 3. Validate scraped proxies concurrently (max 20 at a time to avoid overload)
+  const batchSize = 20;
+  const validScraped = [];
+  for (let i = 0; i < scrapedRaw.length && validScraped.length < 40; i += batchSize) {
+    const batch = scrapedRaw.slice(i, i + batchSize);
+    const results = await Promise.all(batch.map(p => validateProxy(p).then(ok => ok ? p : null)));
+    validScraped.push(...results.filter(Boolean));
+  }
+  console.log(`[ProxyPool] Validated ${validScraped.length} working free proxies from scrapers`);
+
+  // 4. Merge: env proxies first (highest priority), then validated free proxies
+  const merged = [...envProxies, ...validScraped];
+  liveProxyPool = merged;
+  globalProxyIndex = 0;
+  console.log(`[ProxyPool] ✅ Pool refreshed: ${envProxies.length} paid + ${validScraped.length} free = ${merged.length} total proxies`);
+}
+
+// Bootstrap proxy pool on startup, then auto-refresh every 30 minutes
+refreshProxyPool();
+setInterval(() => refreshProxyPool(), 30 * 60 * 1000);
+
 function getProxyArgs() {
-  const proxyListStr = process.env.PROXY_LIST || process.env.HTTP_PROXY || process.env.HTTPS_PROXY || '';
-  const proxies = proxyListStr.split(',').map(p => p.trim()).filter(Boolean);
+  // Use live pool (env + scraped), fallback to env-only if pool not ready yet
+  const pool = liveProxyPool.length > 0
+    ? liveProxyPool
+    : (process.env.PROXY_LIST || process.env.HTTP_PROXY || process.env.HTTPS_PROXY || '')
+        .split(',').map(p => p.trim()).filter(Boolean);
 
   const proxyArgs = [];
-  if (proxies.length > 0) {
-    const currentProxy = proxies[globalProxyIndex % proxies.length];
-    globalProxyIndex = (globalProxyIndex + 1) % proxies.length;
+  if (pool.length > 0) {
+    const currentProxy = pool[globalProxyIndex % pool.length];
+    globalProxyIndex = (globalProxyIndex + 1) % pool.length;
     proxyArgs.push('--proxy', currentProxy);
     const safeProxy = currentProxy.replace(/:[^:@]+@/, ':****@');
-    console.log(`[ProxyRotator] Selected proxy #${globalProxyIndex}/${proxies.length}: ${safeProxy}`);
+    console.log(`[ProxyRotator] Proxy #${globalProxyIndex}/${pool.length}: ${safeProxy}`);
   }
 
   if (process.env.FORCE_IPV6 === 'true') {
@@ -217,17 +332,22 @@ function getCommands() {
 
 // Debug & Status endpoint for Proxy Pool & Scalability Engine
 app.get('/api/proxy-status', (req, res) => {
-  const proxyListStr = process.env.PROXY_LIST || process.env.HTTP_PROXY || process.env.HTTPS_PROXY || '';
-  const proxies = proxyListStr.split(',').map(p => p.trim()).filter(Boolean);
-  const safeProxies = proxies.map(p => p.replace(/:[^:@]+@/, ':****@'));
+  const envStr = process.env.PROXY_LIST || process.env.HTTP_PROXY || process.env.HTTPS_PROXY || '';
+  const envProxies = envStr.split(',').map(p => p.trim()).filter(Boolean);
+  const totalPool = liveProxyPool.length > 0 ? liveProxyPool : envProxies;
+  const safePool = totalPool.map(p => p.replace(/:[^:@]+@/, ':****@'));
+  const freeCount = Math.max(0, totalPool.length - envProxies.length);
 
   res.json({
     status: 'online',
-    proxy_count: proxies.length,
-    active_proxies: safeProxies,
+    proxy_count: totalPool.length,
+    paid_proxies: envProxies.length,
+    free_scraped_proxies: freeCount,
+    active_proxies: safePool,
     ipv6_forced: process.env.FORCE_IPV6 === 'true',
     source_address: process.env.SOURCE_ADDRESS || null,
-    global_proxy_index: globalProxyIndex
+    global_proxy_index: globalProxyIndex,
+    next_refresh_in: '30 minutes (auto)'
   });
 });
 
