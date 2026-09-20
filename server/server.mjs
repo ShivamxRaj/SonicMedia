@@ -1428,12 +1428,50 @@ app.get('/api/download', (req, res) => {
           return tryDirectPipe(0, `ytsearch1:${vMatch[1]}`, true);
         }
 
-        // Fallback Step 2: Query public CDN API for direct audio stream URL and pipe with FFmpeg
-        console.log(`[tryDirectPipe] Attempting Public CDN Stream Fallback for: ${cleanUrl}`);
-        const cdnAudioUrl = await fetchPublicCdnAudioUrl(cleanUrl);
-        if (cdnAudioUrl) {
-          console.log(`[tryDirectPipe CDN Fallback] Piping public CDN stream directly to FFmpeg...`);
-          let ffmpegArgs = ['-y', '-i', cdnAudioUrl, '-vn', '-acodec', 'libmp3lame'];
+        // ⚡ Fallback Step 2: --get-url strategy (commercial-grade: yt-dlp extracts signed CDN URL, Node.js streams directly)
+        // This bypasses yt-dlp streaming entirely - YouTube CDN accepts direct Node.js https.get() requests!
+        console.log(`[tryDirectPipe] Attempting --get-url CDN stream extraction for: ${cleanUrl}`);
+        const getUrlCommands = getCommands(true); // Use proxy for URL extraction
+        let cdnSignedUrl = null;
+
+        for (const { cmd, extraArgs, label: lbl, env } of getUrlCommands) {
+          cdnSignedUrl = await new Promise((resolve) => {
+            const getUrlArgs = [
+              '--get-url',
+              '-f', 'bestaudio[ext=m4a]/bestaudio[ext=webm]/251/250/249/140/ba/bestaudio/best',
+              '--geo-bypass',
+              '--geo-bypass-country', 'US',
+              '--no-check-certificates',
+              '--no-playlist',
+              ...getCookieArgs(),
+              cleanUrl
+            ];
+            let urlOut = '';
+            let handled = false;
+            let proc;
+            try {
+              proc = spawn(cmd, [...extraArgs, ...getUrlArgs], { env: env || process.env });
+            } catch (e) { return resolve(null); }
+
+            const t = setTimeout(() => { handled = true; try { proc.kill('SIGKILL'); } catch(e){} resolve(null); }, 18000);
+            proc.stdout.on('data', d => { urlOut += d.toString(); });
+            proc.on('close', () => {
+              if (handled) return;
+              clearTimeout(t);
+              const url = urlOut.trim().split('\n')[0].trim();
+              resolve(url.startsWith('http') ? url : null);
+            });
+            proc.on('error', () => { clearTimeout(t); resolve(null); });
+          });
+          if (cdnSignedUrl) {
+            console.log(`[tryDirectPipe GetUrl ${lbl}] ✅ Got signed CDN URL, streaming via Node.js https...`);
+            break;
+          }
+        }
+
+        if (cdnSignedUrl) {
+          // Stream signed CDN URL directly through FFmpeg → client (no yt-dlp piping bottleneck!)
+          let ffmpegArgs = ['-y', '-i', cdnSignedUrl, '-vn', '-acodec', 'libmp3lame'];
           if (audioQualityArg === '0') ffmpegArgs.push('-q:a', '0');
           else if (audioQualityArg === '5') ffmpegArgs.push('-q:a', '5');
           else ffmpegArgs.push('-q:a', '2');
@@ -1442,19 +1480,26 @@ app.get('/api/download', (req, res) => {
 
           const ffmpegCmd = hasFfmpeg ? FFMPEG_BIN : 'ffmpeg';
           let ff;
-          try {
-            ff = spawn(ffmpegCmd, ffmpegArgs);
-          } catch (e) {
-            console.error('[CDN Fallback] FFmpeg spawn error:', e.message);
+          try { ff = spawn(ffmpegCmd, ffmpegArgs); } catch (e) {
+            console.error('[GetUrl Fallback] FFmpeg spawn error:', e.message);
           }
 
           if (ff) {
             let bytesWritten = 0;
             let headersSentLocal = false;
+            const cdnTimer = setTimeout(() => {
+              if (bytesWritten === 0) {
+                try { ff.kill('SIGKILL'); } catch(e) {}
+                console.error('[GetUrl Fallback] CDN stream timed out, falling to Piped API...');
+                pipeFromPublicCdn();
+              }
+            }, 20000);
+
             ff.stdout.on('data', (chunk) => {
               if (!headersSentLocal && !res.headersSent) {
                 headersSentLocal = true;
-                console.log(`[CDN Fallback] ⚡ Streaming MP3 audio to client!`);
+                clearTimeout(cdnTimer);
+                console.log('[GetUrl Fallback] ⚡ CDN stream started! Piping MP3 to client...');
                 res.setHeader('Content-Type', 'audio/mpeg');
                 res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
                 res.setHeader('X-Expected-Size', String(expectedSizeHint));
@@ -1471,22 +1516,70 @@ app.get('/api/download', (req, res) => {
               res.write(chunk);
               if (typeof res.flush === 'function') try { res.flush(); } catch (e) {}
             });
-            ff.stdout.on('end', () => {
-              if (bytesWritten > 0) return res.end();
-            });
+            ff.stdout.on('end', () => { if (bytesWritten > 0) res.end(); });
             req.on('close', () => { try { ff.kill('SIGKILL'); } catch (e) {} });
             return;
           }
         }
 
-        console.error(`❌ All direct audio extraction strategies failed for: ${cleanUrl}`);
-        if (!res.headersSent) {
-          res.setHeader('Content-Type', 'application/json');
-          res.status(400).json({ error: '⚠️ Could not process this YouTube link right now. Please verify the URL or try another track.' });
-        } else if (!res.writableEnded) {
-          res.end();
+        // Fallback Step 3: Piped public CDN API (last resort)
+        async function pipeFromPublicCdn() {
+          console.log(`[tryDirectPipe] Attempting Piped Public CDN fallback for: ${cleanUrl}`);
+          const cdnAudioUrl = await fetchPublicCdnAudioUrl(cleanUrl);
+          if (cdnAudioUrl) {
+            console.log(`[tryDirectPipe Piped] Piping public CDN stream directly to FFmpeg...`);
+            let ffmpegArgs = ['-y', '-i', cdnAudioUrl, '-vn', '-acodec', 'libmp3lame'];
+            if (audioQualityArg === '0') ffmpegArgs.push('-q:a', '0');
+            else if (audioQualityArg === '5') ffmpegArgs.push('-q:a', '5');
+            else ffmpegArgs.push('-q:a', '2');
+            if (afFilter) ffmpegArgs.push('-af', afFilter);
+            ffmpegArgs.push('-f', 'mp3', 'pipe:1');
+
+            const ffmpegCmd = hasFfmpeg ? FFMPEG_BIN : 'ffmpeg';
+            let ff;
+            try { ff = spawn(ffmpegCmd, ffmpegArgs); } catch (e) {
+              console.error('[Piped Fallback] FFmpeg spawn error:', e.message);
+            }
+
+            if (ff) {
+              let bytesWritten = 0;
+              let headersSentLocal = false;
+              ff.stdout.on('data', (chunk) => {
+                if (!headersSentLocal && !res.headersSent) {
+                  headersSentLocal = true;
+                  console.log(`[Piped Fallback] ⚡ Streaming MP3 audio to client!`);
+                  res.setHeader('Content-Type', 'audio/mpeg');
+                  res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
+                  res.setHeader('X-Expected-Size', String(expectedSizeHint));
+                  res.setHeader('X-Content-Duration', String(durationHintSec));
+                  res.setHeader('X-Accel-Buffering', 'no');
+                  res.setHeader('Cache-Control', 'no-cache, no-transform, no-store, must-revalidate');
+                  res.setHeader('Pragma', 'no-cache');
+                  res.setHeader('Connection', 'keep-alive');
+                  res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, X-Filename, X-Expected-Size, X-Content-Duration');
+                  res.setHeader('X-Filename', encodeURIComponent(filename));
+                  if (typeof res.flushHeaders === 'function') try { res.flushHeaders(); } catch (e) {}
+                }
+                bytesWritten += chunk.length;
+                res.write(chunk);
+                if (typeof res.flush === 'function') try { res.flush(); } catch (e) {}
+              });
+              ff.stdout.on('end', () => { if (bytesWritten > 0) return res.end(); });
+              req.on('close', () => { try { ff.kill('SIGKILL'); } catch (e) {} });
+              return;
+            }
+          }
+
+          console.error(`❌ All direct audio extraction strategies failed for: ${cleanUrl}`);
+          if (!res.headersSent) {
+            res.setHeader('Content-Type', 'application/json');
+            res.status(400).json({ error: '⚠️ Could not process this YouTube link right now. Please verify the URL or try another track.' });
+          } else if (!res.writableEnded) {
+            res.end();
+          }
         }
-        return;
+
+        return pipeFromPublicCdn();
       }
 
       const { cmd, extraArgs, label, env } = commands[index];
