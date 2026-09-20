@@ -18,8 +18,17 @@ process.on('unhandledRejection', (reason) => {
   console.error('⚠️ [CRASH GUARD] Unhandled Rejection:', reason);
 });
 
-app.use(compression());
-app.use(cors());
+app.use(compression({
+  filter: (req, res) => {
+    // Disable compression on binary streams so proxies don't buffer chunks
+    if (req.path === '/api/download') return false;
+    return compression.filter(req, res);
+  }
+}));
+app.use(cors({
+  origin: '*',
+  exposedHeaders: ['Content-Disposition', 'X-Filename', 'X-Expected-Size', 'X-Content-Duration']
+}));
 app.use(express.json());
 
 // WWW to Apex Domain 301 HTTPS SSL Redirect Middleware
@@ -499,7 +508,7 @@ function detectPlatform(url) {
   return { name: 'Universal Web Media', icon: 'globe', color: '#a855f7' };
 }
 
-// Helper: Fetch real YouTube video duration from page HTML metadata
+// Helper: Fetch real YouTube video duration from page HTML metadata with yt-dlp android fallback
 function getYouTubeDurationFromPage(cleanUrlOrId) {
   return new Promise((resolve) => {
     let videoId = cleanUrlOrId;
@@ -515,7 +524,7 @@ function getYouTubeDurationFromPage(cleanUrlOrId) {
         'Accept-Language': 'en-US,en;q=0.9',
         'Cookie': 'CONSENT=YES+cb; PREF=tz=UTC'
       },
-      timeout: 4000
+      timeout: 3000
     };
 
     https.get(options, (res) => {
@@ -538,9 +547,32 @@ function getYouTubeDurationFromPage(cleanUrlOrId) {
           sec = (h * 3600) + (m * 60) + s;
         }
 
-        resolve(sec);
+        if (sec > 0) return resolve(sec);
+
+        // Fallback to yt-dlp android player client
+        runYtDlp(['--dump-single-json', '--no-playlist', '--extractor-args', 'youtube:player_client=android', `https://www.youtube.com/watch?v=${videoId}`], (code, stdoutData) => {
+          if (code === 0 && stdoutData) {
+            try {
+              const j = JSON.parse(stdoutData);
+              const durSec = j.duration || j.duration_seconds || 0;
+              return resolve(durSec);
+            } catch(e) {}
+          }
+          resolve(0);
+        });
       });
-    }).on('error', () => resolve(0));
+    }).on('error', () => {
+      runYtDlp(['--dump-single-json', '--no-playlist', '--extractor-args', 'youtube:player_client=android', `https://www.youtube.com/watch?v=${videoId}`], (code, stdoutData) => {
+        if (code === 0 && stdoutData) {
+          try {
+            const j = JSON.parse(stdoutData);
+            const durSec = j.duration || j.duration_seconds || 0;
+            return resolve(durSec);
+          } catch(e) {}
+        }
+        resolve(0);
+      });
+    });
   });
 }
 
@@ -1131,7 +1163,28 @@ async function fetchPublicCdnAudioUrl(urlOrId) {
 
 // Stream Download Handler API (INSTANT HEADERS & DIRECT FFMPEG AUDIO FILTER PIPE)
 app.get('/api/download', (req, res) => {
-  const { url, type, quality, speed, title } = req.query;
+  const { url, type, quality, speed, title, dur } = req.query;
+  const durationHintSec = parseFloat(dur) || 0;
+
+  // Compute a rough expected byte size hint for the frontend's adaptive progress bar
+  function getExpectedSizeHint() {
+    const d = durationHintSec > 0 ? durationHintSec : 180;
+    if (type === 'audio') {
+      const q = (quality || '').toLowerCase();
+      let kbps = 256;
+      if (q.includes('320')) kbps = 320;
+      else if (q.includes('128')) kbps = 128;
+      return Math.round(d * (kbps * 1000 / 8));
+    } else {
+      let bps = 200000;
+      const q = (quality || '').toLowerCase();
+      if (q.includes('2160') || q.includes('4k')) bps = 600000;
+      else if (q.includes('720')) bps = 100000;
+      else if (q.includes('480')) bps = 50000;
+      return Math.round(d * bps);
+    }
+  }
+  const expectedSizeHint = getExpectedSizeHint();
 
   let rawUrl = (url || '').trim();
   const secondHttp = rawUrl.indexOf('http', 8);
@@ -1239,7 +1292,13 @@ app.get('/api/download', (req, res) => {
                 console.log(`[CDN Fallback] ⚡ Streaming MP3 audio to client!`);
                 res.setHeader('Content-Type', 'audio/mpeg');
                 res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
-                res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, X-Filename');
+                res.setHeader('X-Expected-Size', String(expectedSizeHint));
+                res.setHeader('X-Content-Duration', String(durationHintSec));
+                res.setHeader('X-Accel-Buffering', 'no');
+                res.setHeader('Cache-Control', 'no-cache, no-transform, no-store, must-revalidate');
+                res.setHeader('Pragma', 'no-cache');
+                res.setHeader('Connection', 'keep-alive');
+                res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, X-Filename, X-Expected-Size, X-Content-Duration');
                 res.setHeader('X-Filename', encodeURIComponent(filename));
               }
               bytesWritten += chunk.length;
@@ -1338,7 +1397,13 @@ app.get('/api/download', (req, res) => {
           console.log(`[tryDirectPipe ${label}] ⚡ First MP3 chunk arrived! Streaming directly to client...`);
           res.setHeader('Content-Type', 'audio/mpeg');
           res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
-          res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, X-Filename');
+          res.setHeader('X-Expected-Size', String(expectedSizeHint));
+          res.setHeader('X-Content-Duration', String(durationHintSec));
+          res.setHeader('X-Accel-Buffering', 'no');
+          res.setHeader('Cache-Control', 'no-cache, no-transform, no-store, must-revalidate');
+          res.setHeader('Pragma', 'no-cache');
+          res.setHeader('Connection', 'keep-alive');
+          res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, X-Filename, X-Expected-Size, X-Content-Duration');
           res.setHeader('X-Filename', encodeURIComponent(filename));
         }
         bytesWritten += chunk.length;
@@ -1489,7 +1554,13 @@ app.get('/api/download', (req, res) => {
         console.log(`[tryDirectVideoPipe ${label}] ⚡ First MP4 video chunk arrived! Streaming directly to client...`);
         res.setHeader('Content-Type', 'video/mp4');
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
-        res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, X-Filename');
+        res.setHeader('X-Expected-Size', String(expectedSizeHint));
+        res.setHeader('X-Content-Duration', String(durationHintSec));
+        res.setHeader('X-Accel-Buffering', 'no');
+        res.setHeader('Cache-Control', 'no-cache, no-transform, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, X-Filename, X-Expected-Size, X-Content-Duration');
         res.setHeader('X-Filename', encodeURIComponent(filename));
       }
       bytesWritten += chunk.length;

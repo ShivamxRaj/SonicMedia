@@ -20,6 +20,7 @@ export default function MediaCard({ media, onDownload, onPreview, isPro, onOpenP
   const [downloadError, setDownloadError] = useState(null);
   const [copied, setCopied] = useState(false);
   const [streamedSize, setStreamedSize] = useState('');
+  const [downloadSpeed, setDownloadSpeed] = useState('');
 
   if (!media) return null;
 
@@ -49,10 +50,11 @@ export default function MediaCard({ media, onDownload, onPreview, isPro, onOpenP
     }
 
     setIsDownloading(true);
-    setDownloadProgress(10);
+    setDownloadProgress(0);
     setDownloadSuccess(false);
     setDownloadError(null);
     setStreamedSize('');
+    setDownloadSpeed('');
 
     try {
       const res = await onDownload({
@@ -64,9 +66,10 @@ export default function MediaCard({ media, onDownload, onPreview, isPro, onOpenP
         uploader: audioSettings.customArtist || media.uploader,
         formatLabel: currentFormat.label,
         audioSettings: activeTab === 'audio' ? audioSettings : null
-      }, (percent, sizeStr) => {
+      }, (percent, sizeStr, speedStr) => {
         setDownloadProgress(percent);
         if (sizeStr) setStreamedSize(sizeStr);
+        if (speedStr) setDownloadSpeed(speedStr);
       });
 
       if (res && res.success !== false) {
@@ -76,10 +79,12 @@ export default function MediaCard({ media, onDownload, onPreview, isPro, onOpenP
           setDownloadSuccess(false);
           setDownloadProgress(0);
           setStreamedSize('');
+          setDownloadSpeed('');
         }, 5000);
       } else {
         setDownloadProgress(0);
         setStreamedSize('');
+        setDownloadSpeed('');
         if (res && res.error) {
           setDownloadError(res.error);
         } else {
@@ -89,6 +94,7 @@ export default function MediaCard({ media, onDownload, onPreview, isPro, onOpenP
     } catch (err) {
       setDownloadProgress(0);
       setStreamedSize('');
+      setDownloadSpeed('');
       setDownloadError('⚠️ An error occurred while processing the download.');
     } finally {
       setTimeout(() => {
@@ -414,7 +420,7 @@ export default function MediaCard({ media, onDownload, onPreview, isPro, onOpenP
                     <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#38bdf8', animation: 'ping 1.2s cubic-bezier(0, 0, 0.2, 1) infinite' }} />
                     {selectedQuality === '2160p' || selectedQuality === 'mp4-4k' 
                       ? '✨ Applying 4K HDR Color Grade & Sharpening Filters...' 
-                      : `Streaming ${activeTab.toUpperCase()}... ${streamedSize ? `(${streamedSize})` : ''}`}
+                      : `Streaming ${activeTab.toUpperCase()}... ${streamedSize ? `(${streamedSize})` : ''} ${downloadSpeed && downloadSpeed !== 'Connecting...' ? `• ${downloadSpeed}` : ''}`}
                   </span>
                   <span style={{ fontWeight: 700 }}>{downloadProgress}%</span>
                 </div>

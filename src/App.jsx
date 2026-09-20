@@ -125,7 +125,7 @@ export default function App() {
     }
   };
 
-  // ⚡ Direct Real-Time Streaming Download Engine with Dynamic Byte Progress
+  // ⚡ Adaptive Real-Time Streaming Download Engine with Dynamic Byte-Flow Progress
   const handleDownload = async (item, onProgress) => {
     const speedParam = item.speed && item.speed !== '1.0x' ? `&speed=${encodeURIComponent(item.speed)}` : '';
     const safeTitle = (item.title || 'sonicmedia-download')
@@ -135,65 +135,114 @@ export default function App() {
       .trim();
 
     const ext = item.type === 'audio' ? 'mp3' : 'mp4';
-    const downloadTarget = `/api/download?url=${encodeURIComponent(item.url)}&type=${item.type}&quality=${item.quality || '256k'}${speedParam}&title=${encodeURIComponent(safeTitle)}`;
+    const durSec = media && media.duration_seconds > 0 ? media.duration_seconds : 0;
+    const downloadTarget = `/api/download?url=${encodeURIComponent(item.url)}&type=${item.type}&quality=${item.quality || '256k'}${speedParam}&title=${encodeURIComponent(safeTitle)}&dur=${durSec}`;
 
-    // Determine expected total bytes based on media duration & selected format bitrate
-    let expectedTotalBytes = 0;
-    const durSec = media && media.duration_seconds > 0 ? media.duration_seconds : 180;
-    if (item.type === 'audio') {
-      let kbps = 256;
-      if (item.quality === '320k') kbps = 320;
-      else if (item.quality === '128k') kbps = 128;
-      expectedTotalBytes = Math.round(durSec * (kbps * 1000 / 8));
-    } else {
-      let bytesPerSec = 200000;
-      if (item.quality === '2160p') bytesPerSec = 600000;
-      else if (item.quality === '720p') bytesPerSec = 100000;
-      else if (item.quality === '480p') bytesPerSec = 50000;
-      expectedTotalBytes = Math.round(durSec * bytesPerSec);
-    }
-    if (expectedTotalBytes <= 0) expectedTotalBytes = 5 * 1024 * 1024;
+    // === Phase 1: Warming (0% → 15%) — smooth animation while server connects ===
+    let currentProgress = 0;
+    const warmingTarget = 15;
+    if (onProgress) onProgress(currentProgress, '0 MB', 'Connecting...');
 
-    let warmingProgress = 5;
-    if (onProgress) onProgress(warmingProgress, '0.1 MB');
-
-    // Warming phase timer: smoothly increments progress (5% -> 25%) while server connects
     const warmingTimer = setInterval(() => {
-      if (warmingProgress < 25) {
-        warmingProgress += 2;
-        const estMb = ((expectedTotalBytes * (warmingProgress / 100)) / (1024 * 1024)).toFixed(1);
-        if (onProgress) onProgress(warmingProgress, `${estMb} MB`);
+      if (currentProgress < warmingTarget) {
+        currentProgress += 1;
+        if (onProgress) onProgress(currentProgress, '0 MB', 'Connecting...');
       }
-    }, 200);
+    }, 150);
 
+    // === Adaptive tracking state ===
     let firstChunkReceived = false;
+    let downloadStartTime = 0;
+    let lastSpeedCalcTime = 0;
+    let lastSpeedCalcBytes = 0;
+    let currentSpeed = 0; // bytes per second
+    let dynamicTotalEstimate = 0; // recalculated each second
 
     try {
       const response = await axios.get(downloadTarget, {
         responseType: 'blob',
         onDownloadProgress: (progressEvent) => {
+          const loadedBytes = progressEvent.loaded;
+          const now = Date.now();
+
+          // First chunk: transition from warming to real tracking
           if (!firstChunkReceived) {
             firstChunkReceived = true;
             clearInterval(warmingTimer);
+            downloadStartTime = now;
+            lastSpeedCalcTime = now;
+            lastSpeedCalcBytes = 0;
+
+            // Use server's X-Expected-Size hint or axios total as initial estimate
+            const serverHint = parseInt(progressEvent.event?.target?.getResponseHeader?.('X-Expected-Size') || '0', 10);
+            const axiosTotal = progressEvent.total && progressEvent.total > 0 ? progressEvent.total : 0;
+            dynamicTotalEstimate = axiosTotal || serverHint || (5 * 1024 * 1024);
+            currentProgress = warmingTarget;
           }
 
-          const loadedBytes = progressEvent.loaded;
-          const mb = (loadedBytes / (1024 * 1024)).toFixed(1);
+          // === Phase 2: Real Byte-Flow (15% → 95%) with adaptive estimate ===
+          const elapsedMs = now - downloadStartTime;
+          const elapsedSec = elapsedMs / 1000;
 
-          let percentCompleted = 0;
+          // Calculate rolling speed every 500ms for smoothness
+          if (now - lastSpeedCalcTime >= 500) {
+            const bytesDelta = loadedBytes - lastSpeedCalcBytes;
+            const timeDelta = (now - lastSpeedCalcTime) / 1000;
+            if (timeDelta > 0) {
+              const instantSpeed = bytesDelta / timeDelta;
+              // Smooth the speed with a weighted average (70% new, 30% old)
+              currentSpeed = currentSpeed > 0 
+                ? (instantSpeed * 0.7) + (currentSpeed * 0.3) 
+                : instantSpeed;
+            }
+            lastSpeedCalcTime = now;
+            lastSpeedCalcBytes = loadedBytes;
+
+            // Dynamically recalculate total estimate based on actual throughput
+            // If we have real speed data and it's been > 2 seconds, update estimate
+            if (currentSpeed > 0 && elapsedSec > 2) {
+              // If server provided Content-Length (progressEvent.total), use that
+              if (progressEvent.total && progressEvent.total > 0) {
+                dynamicTotalEstimate = progressEvent.total;
+              } else {
+                // Extrapolate: if loaded X bytes in Y seconds at Z speed,
+                // and the download seems to still be flowing, scale estimate up
+                // Only grow the estimate if we're approaching the limit too fast
+                const projectedTotal = loadedBytes * (1 + (0.5 / Math.max(0.1, loadedBytes / dynamicTotalEstimate)));
+                // Ensure estimate never shrinks below what we've already received
+                dynamicTotalEstimate = Math.max(loadedBytes * 1.05, Math.min(projectedTotal, dynamicTotalEstimate * 2));
+              }
+            }
+          }
+
+          // Calculate progress percentage within the 15-95% range
+          let rawPercent = 0;
           if (progressEvent.total && progressEvent.total > 0) {
-            percentCompleted = Math.round((loadedBytes * 100) / progressEvent.total);
-          } else {
-            percentCompleted = Math.round((loadedBytes * 100) / expectedTotalBytes);
+            rawPercent = (loadedBytes / progressEvent.total) * 100;
+          } else if (dynamicTotalEstimate > 0) {
+            rawPercent = (loadedBytes / dynamicTotalEstimate) * 100;
           }
 
-          const finalPercent = Math.min(98, Math.max(25, percentCompleted));
-          if (onProgress) onProgress(finalPercent, `${mb} MB`);
+          // Map raw 0-100% to our 15-95% display range (saving 95-100% for completion)
+          const displayPercent = Math.min(95, Math.max(warmingTarget, warmingTarget + (rawPercent * 0.8)));
+          currentProgress = Math.round(displayPercent);
+
+          // Format display values
+          const mbLoaded = (loadedBytes / (1024 * 1024)).toFixed(1);
+          const speedStr = currentSpeed > 0 
+            ? `${(currentSpeed / (1024 * 1024)).toFixed(1)} MB/s` 
+            : 'Calculating...';
+
+          if (onProgress) onProgress(currentProgress, `${mbLoaded} MB`, speedStr);
         }
       });
 
+      // === Phase 3: Completion — snap to 100% ===
       clearInterval(warmingTimer);
-      if (onProgress) onProgress(100, '');
+      const finalSize = response.data?.size 
+        ? (response.data.size / (1024 * 1024)).toFixed(1) 
+        : '';
+      if (onProgress) onProgress(100, finalSize ? `${finalSize} MB` : '', 'Complete');
 
       // Trigger native browser download save dialog with actual file blob
       const blob = new Blob([response.data], { type: item.type === 'audio' ? 'audio/mpeg' : 'video/mp4' });
@@ -250,6 +299,7 @@ export default function App() {
       return { success: false, error: errorMsg };
     }
   };
+
 
   const handleClearHistory = () => {
     saveHistory([]);
