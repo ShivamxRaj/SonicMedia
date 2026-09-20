@@ -509,6 +509,7 @@ function detectPlatform(url) {
 }
 
 // Helper: Fetch real YouTube video duration from page HTML metadata with yt-dlp android fallback
+// Helper: Fetch real YouTube video duration from page HTML metadata with Googlebot UA & redirect support
 function getYouTubeDurationFromPage(cleanUrlOrId) {
   return new Promise((resolve) => {
     let videoId = cleanUrlOrId;
@@ -516,63 +517,61 @@ function getYouTubeDurationFromPage(cleanUrlOrId) {
     if (vMatch) videoId = vMatch[1];
     if (!videoId || videoId.length !== 11) return resolve(0);
 
-    const options = {
-      hostname: 'www.youtube.com',
-      path: `/watch?v=${videoId}`,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Cookie': 'CONSENT=YES+cb; PREF=tz=UTC'
-      },
-      timeout: 3000
-    };
-
-    https.get(options, (res) => {
-      let html = '';
-      res.on('data', chunk => html += chunk);
-      res.on('end', () => {
-        const m1 = html.match(/"approxDurationMs":"(\d+)"/);
-        const m2 = html.match(/"lengthSeconds":"(\d+)"/);
-        const m3 = html.match(/"durationSeconds":\s*(\d+)/);
-        const m4 = html.match(/<meta itemprop="duration" content="PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?">/);
-
-        let sec = 0;
-        if (m1) sec = Math.floor(parseInt(m1[1], 10) / 1000);
-        else if (m2) sec = parseInt(m2[1], 10);
-        else if (m3) sec = parseInt(m3[1], 10);
-        else if (m4) {
-          const h = parseInt(m4[1] || '0', 10);
-          const m = parseInt(m4[2] || '0', 10);
-          const s = parseInt(m4[3] || '0', 10);
-          sec = (h * 3600) + (m * 60) + s;
-        }
-
-        if (sec > 0) return resolve(sec);
-
-        // Fallback to yt-dlp android player client
-        runYtDlp(['--dump-single-json', '--no-playlist', '--extractor-args', 'youtube:player_client=android', `https://www.youtube.com/watch?v=${videoId}`], (code, stdoutData) => {
-          if (code === 0 && stdoutData) {
-            try {
-              const j = JSON.parse(stdoutData);
-              const durSec = j.duration || j.duration_seconds || 0;
-              return resolve(durSec);
-            } catch(e) {}
+    function fetchUrl(targetUrl, depth = 0) {
+      if (depth > 3) return resolve(0);
+      const req = https.get(targetUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Cookie': 'CONSENT=YES+cb; SOCS=CAI; PREF=tz=UTC'
+        },
+        timeout: 4000
+      }, (res) => {
+        if (res.statusCode === 301 || res.statusCode === 302) {
+          if (res.headers.location) {
+            return fetchUrl(res.headers.location, depth + 1);
           }
-          resolve(0);
+        }
+        let html = '';
+        res.on('data', chunk => html += chunk);
+        res.on('end', () => {
+          const m1 = html.match(/"approxDurationMs":"(\d+)"/);
+          const m2 = html.match(/"lengthSeconds":"(\d+)"/);
+          const m3 = html.match(/"durationSeconds":\s*(\d+)/);
+          const m4 = html.match(/itemprop="duration"\s+content="PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?"/i);
+
+          let sec = 0;
+          if (m2) sec = parseInt(m2[1], 10);
+          else if (m1) sec = Math.floor(parseInt(m1[1], 10) / 1000);
+          else if (m3) sec = parseInt(m3[1], 10);
+          else if (m4) {
+            const h = parseInt(m4[1] || '0', 10);
+            const m = parseInt(m4[2] || '0', 10);
+            const s = parseInt(m4[3] || '0', 10);
+            sec = (h * 3600) + (m * 60) + s;
+          }
+
+          if (sec > 0) return resolve(sec);
+
+          // Fallback to yt-dlp android player client
+          runYtDlp(['--dump-single-json', '--no-playlist', '--extractor-args', 'youtube:player_client=android', `https://www.youtube.com/watch?v=${videoId}`], (code, stdoutData) => {
+            if (code === 0 && stdoutData) {
+              try {
+                const j = JSON.parse(stdoutData);
+                const durSec = j.duration || j.duration_seconds || 0;
+                return resolve(durSec);
+              } catch(e) {}
+            }
+            resolve(0);
+          });
         });
       });
-    }).on('error', () => {
-      runYtDlp(['--dump-single-json', '--no-playlist', '--extractor-args', 'youtube:player_client=android', `https://www.youtube.com/watch?v=${videoId}`], (code, stdoutData) => {
-        if (code === 0 && stdoutData) {
-          try {
-            const j = JSON.parse(stdoutData);
-            const durSec = j.duration || j.duration_seconds || 0;
-            return resolve(durSec);
-          } catch(e) {}
-        }
-        resolve(0);
-      });
-    });
+
+      req.on('error', () => resolve(0));
+      req.on('timeout', () => { req.destroy(); resolve(0); });
+    }
+
+    fetchUrl(`https://www.youtube.com/watch?v=${videoId}`);
   });
 }
 
