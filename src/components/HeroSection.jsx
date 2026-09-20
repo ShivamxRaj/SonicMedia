@@ -97,6 +97,7 @@ export default function HeroSection({ url, setUrl, onAnalyze, loading, error, on
           type="text"
           className="input-field"
           placeholder="Paste social media URL here (or press Ctrl+V for auto-fetch)..."
+          aria-label="Paste video or track URL"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           onKeyDown={(e) => {

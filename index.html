@@ -37,13 +37,24 @@
     <meta name="twitter:title" content="SonicMedia — YouTube Song Downloader App & Insta Reels Saver" />
     <meta name="twitter:description" content="Free 320kbps MP3 song downloader app, 4K video downloader, and Insta Reels music & audio downloader." />
 
-    <!-- Schema.org JSON-LD for Google WebApplication, HowTo & Rich FAQ Dropdowns -->
+    <!-- Schema.org JSON-LD for Google WebApplication, WebSite, HowTo & Rich FAQ Dropdowns -->
     <script type="application/ld+json">
     [
       {
         "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "SonicMedia",
+        "url": "https://sonicmedia.me/",
+        "potentialAction": {
+          "@type": "SearchAction",
+          "target": "https://sonicmedia.me/?url={search_term_string}",
+          "query-input": "required name=search_term_string"
+        }
+      },
+      {
+        "@context": "https://schema.org",
         "@type": "WebApplication",
-        "name": "SonicMedia YouTube Song Downloader App & Insta Reels Saver",
+        "name": "SonicMedia YouTube Song Downloader App & MP3 Converter",
         "url": "https://sonicmedia.me/",
         "description": "Free online YouTube song downloader app, 320kbps MP3 converter, and Insta Reels audio & music downloader without watermark.",
         "applicationCategory": "MultimediaApplication",
@@ -57,7 +68,7 @@
       {
         "@context": "https://schema.org",
         "@type": "HowTo",
-        "name": "How to Use Free YouTube Song Downloader App & Insta Reels Saver",
+        "name": "How to Use Free YouTube Song Downloader App & MP3 Converter",
         "step": [
           {
             "@type": "HowToStep",
@@ -80,6 +91,14 @@
         "@context": "https://schema.org",
         "@type": "FAQPage",
         "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "How to use SonicMedia as a free MP3 Converter for YouTube videos?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "SonicMedia acts as an instant online MP3 converter. Paste any YouTube video link, select 320kbps MP3 Ultra HD quality, and save pristine audio with custom ID3 metadata tags."
+            }
+          },
           {
             "@type": "Question",
             "name": "What is the best free YouTube song downloader app for Mobile and PC?",
