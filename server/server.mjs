@@ -1431,7 +1431,7 @@ app.get('/api/download', (req, res) => {
         // ⚡ Fallback Step 2: --get-url strategy (commercial-grade: yt-dlp extracts signed CDN URL, Node.js streams directly)
         // This bypasses yt-dlp streaming entirely - YouTube CDN accepts direct Node.js https.get() requests!
         console.log(`[tryDirectPipe] Attempting --get-url CDN stream extraction for: ${cleanUrl}`);
-        const getUrlCommands = getCommands(true); // Use proxy for URL extraction
+        const getUrlCommands = getCommands(false); // MUST be direct (no proxy): YouTube CDN signed URLs are IP-locked to requester's IP!
         let cdnSignedUrl = null;
 
         for (const { cmd, extraArgs, label: lbl, env } of getUrlCommands) {
