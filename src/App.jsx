@@ -125,7 +125,7 @@ export default function App() {
     }
   };
 
-  // ⚡ Direct Real-Time Streaming Download Engine with Live Progress
+  // ⚡ Direct Real-Time Streaming Download Engine with Dynamic Byte Progress
   const handleDownload = async (item, onProgress) => {
     const speedParam = item.speed && item.speed !== '1.0x' ? `&speed=${encodeURIComponent(item.speed)}` : '';
     const safeTitle = (item.title || 'sonicmedia-download')
@@ -137,24 +137,62 @@ export default function App() {
     const ext = item.type === 'audio' ? 'mp3' : 'mp4';
     const downloadTarget = `/api/download?url=${encodeURIComponent(item.url)}&type=${item.type}&quality=${item.quality || '256k'}${speedParam}&title=${encodeURIComponent(safeTitle)}`;
 
-    try {
-      if (onProgress) onProgress(15, '0.5 MB');
+    // Determine expected total bytes based on media duration & selected format bitrate
+    let expectedTotalBytes = 0;
+    const durSec = media && media.duration_seconds > 0 ? media.duration_seconds : 180;
+    if (item.type === 'audio') {
+      let kbps = 256;
+      if (item.quality === '320k') kbps = 320;
+      else if (item.quality === '128k') kbps = 128;
+      expectedTotalBytes = Math.round(durSec * (kbps * 1000 / 8));
+    } else {
+      let bytesPerSec = 200000;
+      if (item.quality === '2160p') bytesPerSec = 600000;
+      else if (item.quality === '720p') bytesPerSec = 100000;
+      else if (item.quality === '480p') bytesPerSec = 50000;
+      expectedTotalBytes = Math.round(durSec * bytesPerSec);
+    }
+    if (expectedTotalBytes <= 0) expectedTotalBytes = 5 * 1024 * 1024;
 
+    let warmingProgress = 5;
+    if (onProgress) onProgress(warmingProgress, '0.1 MB');
+
+    // Warming phase timer: smoothly increments progress (5% -> 25%) while server connects
+    const warmingTimer = setInterval(() => {
+      if (warmingProgress < 25) {
+        warmingProgress += 2;
+        const estMb = ((expectedTotalBytes * (warmingProgress / 100)) / (1024 * 1024)).toFixed(1);
+        if (onProgress) onProgress(warmingProgress, `${estMb} MB`);
+      }
+    }, 200);
+
+    let firstChunkReceived = false;
+
+    try {
       const response = await axios.get(downloadTarget, {
         responseType: 'blob',
         onDownloadProgress: (progressEvent) => {
-          if (progressEvent.total) {
-            const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-            const mb = (progressEvent.loaded / (1024 * 1024)).toFixed(1);
-            if (onProgress) onProgress(Math.min(99, percentCompleted), `${mb} MB`);
-          } else {
-            const loadedMB = (progressEvent.loaded / (1024 * 1024)).toFixed(1);
-            const estimatedPercent = Math.min(95, Math.round(15 + (progressEvent.loaded / 100000)));
-            if (onProgress) onProgress(estimatedPercent, `${loadedMB} MB`);
+          if (!firstChunkReceived) {
+            firstChunkReceived = true;
+            clearInterval(warmingTimer);
           }
+
+          const loadedBytes = progressEvent.loaded;
+          const mb = (loadedBytes / (1024 * 1024)).toFixed(1);
+
+          let percentCompleted = 0;
+          if (progressEvent.total && progressEvent.total > 0) {
+            percentCompleted = Math.round((loadedBytes * 100) / progressEvent.total);
+          } else {
+            percentCompleted = Math.round((loadedBytes * 100) / expectedTotalBytes);
+          }
+
+          const finalPercent = Math.min(98, Math.max(25, percentCompleted));
+          if (onProgress) onProgress(finalPercent, `${mb} MB`);
         }
       });
 
+      clearInterval(warmingTimer);
       if (onProgress) onProgress(100, '');
 
       // Trigger native browser download save dialog with actual file blob
@@ -191,6 +229,7 @@ export default function App() {
 
       return { success: true };
     } catch (err) {
+      clearInterval(warmingTimer);
       console.error('Download Error:', err);
       let errorMsg = '⚠️ Download failed. Please try again.';
       if (err.response && err.response.data) {

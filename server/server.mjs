@@ -94,7 +94,14 @@ function ensureYtDlpBinary(forceUpdate = false, callback = null) {
             console.log(`✅ Standalone latest yt-dlp binary updated successfully: ${YTDLP_BIN}`);
             if (callback) callback(YTDLP_BIN);
           } catch (err) {
-            console.error('Failed to update yt-dlp binary:', err);
+            try {
+              fs.copyFileSync(YTDLP_TMP, YTDLP_BIN);
+              try { fs.unlinkSync(YTDLP_TMP); } catch (e) {}
+              if (callback) callback(YTDLP_BIN);
+            } catch (e) {
+              console.log('ℹ️ yt-dlp binary update deferred (currently in use).');
+              if (callback) callback(YTDLP_BIN);
+            }
           }
         });
       });
@@ -492,6 +499,51 @@ function detectPlatform(url) {
   return { name: 'Universal Web Media', icon: 'globe', color: '#a855f7' };
 }
 
+// Helper: Fetch real YouTube video duration from page HTML metadata
+function getYouTubeDurationFromPage(cleanUrlOrId) {
+  return new Promise((resolve) => {
+    let videoId = cleanUrlOrId;
+    const vMatch = (cleanUrlOrId || '').match(/(?:v=|\/v\/|youtu\.be\/|\/shorts\/)([a-zA-Z0-9_-]{11})/);
+    if (vMatch) videoId = vMatch[1];
+    if (!videoId || videoId.length !== 11) return resolve(0);
+
+    const options = {
+      hostname: 'www.youtube.com',
+      path: `/watch?v=${videoId}`,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Cookie': 'CONSENT=YES+cb; PREF=tz=UTC'
+      },
+      timeout: 4000
+    };
+
+    https.get(options, (res) => {
+      let html = '';
+      res.on('data', chunk => html += chunk);
+      res.on('end', () => {
+        const m1 = html.match(/"approxDurationMs":"(\d+)"/);
+        const m2 = html.match(/"lengthSeconds":"(\d+)"/);
+        const m3 = html.match(/"durationSeconds":\s*(\d+)/);
+        const m4 = html.match(/<meta itemprop="duration" content="PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?">/);
+
+        let sec = 0;
+        if (m1) sec = Math.floor(parseInt(m1[1], 10) / 1000);
+        else if (m2) sec = parseInt(m2[1], 10);
+        else if (m3) sec = parseInt(m3[1], 10);
+        else if (m4) {
+          const h = parseInt(m4[1] || '0', 10);
+          const m = parseInt(m4[2] || '0', 10);
+          const s = parseInt(m4[3] || '0', 10);
+          sec = (h * 3600) + (m * 60) + s;
+        }
+
+        resolve(sec);
+      });
+    }).on('error', () => resolve(0));
+  });
+}
+
 // Format duration from seconds or duration string to MM:SS / HH:MM:SS
 function formatDuration(sec, fallbackStr = '') {
   if (sec !== undefined && sec !== null) {
@@ -515,13 +567,17 @@ function formatDuration(sec, fallbackStr = '') {
   if (fallbackStr && typeof fallbackStr === 'string' && fallbackStr.includes(':')) {
     return fallbackStr;
   }
-  return '03:45';
+  return '0:00';
 }
 
 
 // Fetch YouTube metadata via noembed.com fallback API if 429
-function fetchNoembedFallback(cleanUrl, platform, res) {
+async function fetchNoembedFallback(cleanUrl, platform, res) {
   const apiUrl = `https://noembed.com/embed?url=${encodeURIComponent(cleanUrl)}`;
+
+  // Retrieve actual video duration in parallel from YouTube page
+  const pageDurationSec = await getYouTubeDurationFromPage(cleanUrl);
+
   https.get(apiUrl, (apiRes) => {
     let data = '';
     apiRes.on('data', chunk => data += chunk);
@@ -531,11 +587,13 @@ function fetchNoembedFallback(cleanUrl, platform, res) {
         if (json.title) {
           const fallbackAudioUrl = `/api/download?url=${encodeURIComponent(cleanUrl)}&type=audio&quality=320k&title=${encodeURIComponent(json.title)}`;
           const fallbackVideoUrl = `/api/download?url=${encodeURIComponent(cleanUrl)}&type=video&quality=1080p&title=${encodeURIComponent(json.title)}`;
+          const finalDuration = pageDurationSec > 0 ? formatDuration(pageDurationSec) : '0:00';
+
           return res.json({
             title: json.title,
-            uploader: json.author_name || 'YRF Media',
-            duration: '03:45',
-            duration_seconds: 225,
+            uploader: json.author_name || 'YouTube Author',
+            duration: finalDuration,
+            duration_seconds: pageDurationSec || 0,
             thumbnail: json.thumbnail_url || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=800&q=80',
             platform,
             url: cleanUrl,
@@ -860,7 +918,7 @@ app.get('/api/info', async (req, res) => {
     cleanUrl
   ];
 
-  runYtDlp(infoArgs, (code, stdoutData, stderrData) => {
+  runYtDlp(infoArgs, async (code, stdoutData, stderrData) => {
     if (code !== 0 || !stdoutData) {
       console.error('yt-dlp stderr:', stderrData);
       if (platform.name === 'YouTube') {
@@ -875,9 +933,18 @@ app.get('/api/info', async (req, res) => {
       const titleEnc = encodeURIComponent(info.title || 'media');
       const urlEnc = encodeURIComponent(cleanUrl);
 
-      const rawDuration = info.duration ?? info.duration_seconds ?? info.length_seconds ?? info.duration_string;
+      let rawDuration = info.duration ?? info.duration_seconds ?? info.length_seconds ?? info.duration_string;
+      let secondsVal = typeof rawDuration === 'number' ? rawDuration : (parseFloat(rawDuration) || 0);
+
+      if (secondsVal === 0 && platform.name === 'YouTube') {
+        const pageSec = await getYouTubeDurationFromPage(cleanUrl);
+        if (pageSec > 0) {
+          secondsVal = pageSec;
+          rawDuration = pageSec;
+        }
+      }
+
       const formattedDuration = formatDuration(rawDuration, info.duration_string);
-      const secondsVal = typeof rawDuration === 'number' ? rawDuration : (parseFloat(rawDuration) || 0);
 
       const response = {
         title: info.title || 'Social Media Video',
