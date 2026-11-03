@@ -1,357 +1,114 @@
 import React, { useState } from 'react';
-import { Zap, Headphones, Film, ShieldCheck, HelpCircle, ChevronDown, Sparkles, Music, Video, Smartphone, Sliders } from 'lucide-react';
+import {
+  ChevronDown,
+  Film,
+  Headphones,
+  HelpCircle,
+  ShieldCheck,
+  Smartphone,
+  Zap
+} from 'lucide-react';
+
+const features = [
+  {
+    icon: Headphones,
+    title: 'Studio audio',
+    desc: 'Save crisp MP3, WAV, or FLAC audio with flexible quality options.'
+  },
+  {
+    icon: Film,
+    title: 'HD video',
+    desc: 'Keep your favourite videos sharp with fast 1080p and 4K downloads.'
+  },
+  {
+    icon: Zap,
+    title: 'Built for speed',
+    desc: 'A focused workflow that gets you from link to download in seconds.'
+  },
+  {
+    icon: ShieldCheck,
+    title: 'Private by default',
+    desc: 'No account, no clutter, and no unnecessary steps before you start.'
+  }
+];
+
+const faqs = [
+  {
+    icon: Zap,
+    question: 'How do I download a file?',
+    answer: 'Paste a supported link into the search bar, select your format and quality, then choose Download.'
+  },
+  {
+    icon: Smartphone,
+    question: 'Which platforms are supported?',
+    answer: 'SonicMedia supports YouTube, Instagram, TikTok, Twitter/X, SoundCloud, Facebook, and many more.'
+  },
+  {
+    icon: Headphones,
+    question: 'Can I customise audio before saving?',
+    answer: 'Yes. Audio Studio lets you adjust tempo and edit basic ID3 tags before downloading.'
+  }
+];
 
 export default function FeaturesSection() {
-  const [openIndex, setOpenIndex] = useState(0); // Default open first FAQ item
-
-  const features = [
-    {
-      icon: Headphones,
-      title: '320kbps Studio Audio',
-      desc: 'Extract pristine studio quality MP3, WAV, and FLAC audio streams with crystal clear sound.',
-      color: '#a855f7',
-      glow: 'rgba(168, 85, 247, 0.25)'
-    },
-    {
-      icon: Film,
-      title: '4K & 1080p Ultra HD Video',
-      desc: 'Download videos up to 4K 2160p resolution with high frame rates, original audio tracks, and HDR color grading.',
-      color: '#38bdf8',
-      glow: 'rgba(56, 189, 248, 0.25)'
-    },
-    {
-      icon: Zap,
-      title: '1000+ Platforms Supported',
-      desc: 'YouTube, Instagram Reels, TikTok without watermark, Twitter/X, SoundCloud, Facebook and more.',
-      color: '#ec4899',
-      glow: 'rgba(236, 72, 153, 0.25)'
-    },
-    {
-      icon: ShieldCheck,
-      title: '100% Free & Ad-Free',
-      desc: 'No registration, no pop-up ads, no malware. Pure high-speed media conversion directly in browser.',
-      color: '#10b981',
-      glow: 'rgba(16, 185, 129, 0.25)'
-    }
-  ];
-
-  const faqs = [
-    {
-      icon: Music,
-      category: 'Audio Extraction',
-      q: 'How to convert YouTube videos to 320kbps MP3 audio for free?',
-      a: 'Simply copy the YouTube video link, paste it into the SonicMedia input box, select 320kbps MP3 Ultra HD, and click Download. Our server streams the audio instantly without software installation.'
-    },
-    {
-      icon: Video,
-      category: '4K HDR Video',
-      q: 'Can I download 4K Ultra HD videos with HDR color enhancement?',
-      a: 'Yes! SonicMedia applies FFmpeg HDR color grading and edge sharpening filters to 4K 2160p video downloads for vibrant, remaster-quality visuals.'
-    },
-    {
-      icon: Smartphone,
-      category: 'Social Media',
-      q: 'How to download Instagram Reels & TikTok without watermark?',
-      a: 'Paste any Instagram Reel or TikTok URL into SonicMedia. The extraction engine automatically strips platform watermarks and delivers clean HD video.'
-    },
-    {
-      icon: Sliders,
-      category: 'Audio Studio',
-      q: 'How to make Slowed + Reverb or Nightcore remixes online?',
-      a: 'Use the built-in Audio Studio tools on SonicMedia to toggle 0.8x Slowed + Reverb, 1.25x Nightcore, or 1.5x Fast Workout pitch modifications directly before saving your MP3.'
-    }
-  ];
-
-  const toggleFaq = (index) => {
-    setOpenIndex(openIndex === index ? null : index);
-  };
+  const [openIndex, setOpenIndex] = useState(0);
 
   return (
-    <section style={{
-      maxWidth: '1100px',
-      margin: '0 auto 80px',
-      padding: '0 24px'
-    }}>
-      {/* Features Grid Header */}
-      <div style={{ textAlign: 'center', marginBottom: '45px' }}>
-        <div style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '8px',
-          padding: '6px 16px',
-          borderRadius: '30px',
-          background: 'rgba(168, 85, 247, 0.12)',
-          border: '1px solid rgba(168, 85, 247, 0.25)',
-          color: '#c084fc',
-          fontSize: '0.8rem',
-          fontWeight: 700,
-          marginBottom: '16px'
-        }}>
-          <Sparkles size={14} />
-          <span>ULTRA HIGH PERFORMANCE</span>
+    <section className="features-page-section">
+      <div className="section-heading features-section-heading">
+        <h2>Everything you need. <span className="text-gradient">Nothing you don’t.</span></h2>
+        <p>Simple tools, polished output, and a workflow that stays out of your way.</p>
+      </div>
+
+      <div className="feature-grid">
+        {features.map(({ icon: Icon, title, desc }, index) => (
+          <article className={`feature-card feature-card-${index + 1} glass-card`} key={title}>
+            <span className="feature-card-number">0{index + 1}</span>
+            <div className="feature-icon"><Icon size={21} /></div>
+            <h3>{title}</h3>
+            <p>{desc}</p>
+            <span className="feature-card-link">Explore capability <span>↗</span></span>
+          </article>
+        ))}
+      </div>
+
+      <div className="trust-panel glass-card">
+        <div>
+          <span className="section-eyebrow">Made for everyday creators</span>
+          <h2>From link to library, without the clutter.</h2>
         </div>
-
-        <h2 style={{ fontSize: '2.2rem', fontWeight: 900, marginBottom: '12px', letterSpacing: '-0.02em' }}>
-          Why Choose <span className="text-gradient">SonicMedia</span>
-        </h2>
-        <p style={{ color: 'var(--text-muted)', fontSize: '1.05rem', maxWidth: '600px', margin: '0 auto' }}>
-          Engineered for speed, studio-fidelity audio, and seamless high-definition video extraction.
-        </p>
-      </div>
-
-      {/* Features Cards */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-        gap: '20px',
-        marginBottom: '60px'
-      }}>
-        {features.map((item, idx) => {
-          const Icon = item.icon;
-          return (
-            <div
-              key={idx}
-              className="glass-card"
-              style={{
-                padding: '26px 22px',
-                background: 'rgba(12, 14, 22, 0.6)',
-                border: '1px solid rgba(255, 255, 255, 0.07)'
-              }}
-            >
-              <div style={{
-                width: '46px',
-                height: '46px',
-                borderRadius: '14px',
-                background: 'rgba(255, 255, 255, 0.04)',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginBottom: '18px'
-              }}>
-                <Icon size={22} color={item.color} />
-              </div>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '8px', color: '#fff' }}>
-                {item.title}
-              </h3>
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.55 }}>
-                {item.desc}
-              </p>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* High-Converting SEO Body Text & Headings Section for RelateSEO & Rank #1 */}
-      <div className="glass-card" style={{
-        padding: '36px',
-        background: 'rgba(12, 14, 22, 0.6)',
-        border: '1px solid rgba(255, 255, 255, 0.07)',
-        marginBottom: '60px',
-        textAlign: 'left'
-      }}>
-        <h1 style={{ fontSize: '1.8rem', fontWeight: 900, marginBottom: '16px', color: '#fff' }}>
-          Effortless <span className="text-gradient">YouTube to MP3</span> & 4K <span className="text-gradient">Video Downloader</span>
-        </h1>
-        
-        <p style={{ fontSize: '0.95rem', color: 'var(--text-muted)', lineHeight: 1.7, marginBottom: '24px' }}>
-          SonicMedia offers a premier suite for media conversion. Instantly convert videos to studio-quality audio, customize ID3 metadata tags, or download 4K videos. Our service is the ideal <strong>video downloader</strong> for content from YouTube, Instagram Reels, TikTok, Twitter/X, and SoundCloud.
-        </p>
-
-        <h2 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#38bdf8', marginBottom: '14px' }}>
-          Why SonicMedia is Your Premier Video Downloader
-        </h2>
-        
-        <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', lineHeight: 1.65, marginBottom: '20px' }}>
-          Our platform is engineered for exceptional speed, studio-fidelity audio, and seamless high-definition video extraction. Experience the best online media conversion available.
-        </p>
-
-        <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <li style={{ fontSize: '0.9rem', color: '#e2e8f0', lineHeight: 1.6 }}>
-            <strong style={{ color: '#c084fc' }}>Studio Quality Audio:</strong> Extract pristine MP3, WAV, and FLAC audio streams at a full 320kbps for crystal-clear sound. Our <strong>youtube to mp3</strong> tool ensures the highest fidelity.
-          </li>
-          <li style={{ fontSize: '0.9rem', color: '#e2e8f0', lineHeight: 1.6 }}>
-            <strong style={{ color: '#38bdf8' }}>Ultra HD Video:</strong> Download videos in resolutions up to 4K 2160p with high frame rates, preserving original audio tracks and HDR color grading. This makes us a superior <strong>video downloader</strong> choice.
-          </li>
-          <li style={{ fontSize: '0.9rem', color: '#ec4899' }}>
-            <strong style={{ color: '#ec4899' }}>Broad Platform Support:</strong> We support over 1000 platforms, including YouTube, Facebook, and a high-quality <strong>instagram reels downloader</strong>. We also handle TikTok without watermarks.
-          </li>
-        </ul>
-
-        <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#a855f7', marginBottom: '12px' }}>
-          Seamless Instagram Reels Downloader and More
-        </h2>
-        <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', lineHeight: 1.65 }}>
-          No registration, no pop-up ads, and no malware. We provide pure, high-speed media conversion directly within your browser. Enjoy fast 320kbps MP3 audio downloads, 4K video saving, and instant Instagram Reels sound extraction.
-        </p>
-      </div>
-
-
-
-      {/* SEO Interactive FAQ Accordions */}
-      <div className="glass-card" style={{
-        padding: '32px',
-        background: 'rgba(12, 14, 22, 0.6)',
-        border: '1px solid rgba(255, 255, 255, 0.07)'
-      }}>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: '28px',
-          flexWrap: 'wrap',
-          gap: '12px'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{
-              width: '42px',
-              height: '42px',
-              borderRadius: '12px',
-              background: 'rgba(56, 189, 248, 0.15)',
-              border: '1px solid rgba(56, 189, 248, 0.3)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              <HelpCircle size={22} color="#38bdf8" />
-            </div>
-            <div>
-              <h2 style={{ fontSize: '1.4rem', fontWeight: 900, color: '#fff' }}>
-                Comparison & Evaluation FAQ
-              </h2>
-              <p style={{ fontSize: '0.825rem', color: 'var(--text-muted)' }}>
-                Comparing SonicMedia with Y2Mate, SaveFrom, YTMP3 & SnapSave
-              </p>
-            </div>
+        <div className="trust-content">
+          <p>Choose audio when you want the soundtrack. Choose video when you want the full moment. SonicMedia keeps both experiences in one place.</p>
+          <div className="trust-points">
+            <span>Audio + video</span>
+            <span>Creator-first</span>
+            <span>Ready when you are</span>
           </div>
+        </div>
+      </div>
 
-          <span style={{
-            fontSize: '0.78rem',
-            background: 'rgba(168, 85, 247, 0.15)',
-            color: '#c084fc',
-            padding: '4px 12px',
-            borderRadius: '20px',
-            fontWeight: 700,
-            border: '1px solid rgba(168, 85, 247, 0.3)'
-          }}>
-            4 Evaluation Guides
-          </span>
+      <div className="faq-panel glass-card">
+        <div className="faq-heading">
+          <div className="feature-icon"><HelpCircle size={21} /></div>
+          <div>
+            <span className="section-eyebrow">Quick answers</span>
+            <h2>Frequently asked questions</h2>
+          </div>
         </div>
 
-        {/* Accordion Stack */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          {[
-            {
-              icon: Music,
-              category: 'SonicMedia vs Y2Mate',
-              q: 'SonicMedia vs Y2Mate: Which YouTube to MP3 Downloader is Better?',
-              a: 'SonicMedia is significantly better than Y2Mate because it delivers full 320kbps Ultra HD audio quality, zero pop-up malware ads, and includes an online Slowed + Reverb Audio Studio, whereas Y2Mate caps audio at 128kbps and forces pop-under advertisements.'
-            },
-            {
-              icon: Video,
-              category: 'SaveFrom Alternative',
-              q: 'Why is SonicMedia the Best SaveFrom Net Alternative in 2026?',
-              a: 'SaveFrom Net limits video downloads to 720p unless software is installed. SonicMedia serves true 4K 2160p Ultra HD videos with FFmpeg HDR color grading directly in your browser with zero extensions or apps required.'
-            },
-            {
-              icon: Smartphone,
-              category: 'Review & Safety Rating',
-              q: 'SonicMedia Review & Safety Test: Is SonicMedia 100% Safe & Ad-Free?',
-              a: 'Yes. SonicMedia undergoes continuous security scanning and contains zero popups, zero redirects, zero browser push notifications, and zero tracking cookies. All downloads are directly processed in native browser downloads.'
-            },
-            {
-              icon: Sliders,
-              category: 'Pros & Cons Evaluation',
-              q: 'What are the Pros and Cons of using SonicMedia vs standard converters?',
-              a: 'Pros: True 320kbps MP3 audio, 4K HDR video master, built-in pitch/tempo modifier studio, TikTok watermark remover, and zero ads. Cons: High quality 4K renders take a few seconds to process.'
-            }
-          ].map((faq, i) => {
-            const isOpen = openIndex === i;
-            const IconComponent = faq.icon;
+        <div className="faq-list">
+          {faqs.map(({ icon: Icon, question, answer }, index) => {
+            const isOpen = openIndex === index;
             return (
-              <div
-                key={i}
-                style={{
-                  borderRadius: 'var(--radius-md)',
-                  border: isOpen ? '1px solid rgba(255, 255, 255, 0.14)' : '1px solid rgba(255, 255, 255, 0.05)',
-                  background: isOpen ? 'rgba(18, 22, 34, 0.7)' : 'rgba(255, 255, 255, 0.02)',
-                  overflow: 'hidden',
-                  transition: 'all 0.25s ease'
-                }}
-              >
-                {/* Accordion Trigger Header */}
-                <button
-                  onClick={() => toggleFaq(i)}
-                  style={{
-                    width: '100%',
-                    padding: '18px 22px',
-                    background: 'transparent',
-                    border: 'none',
-                    color: '#fff',
-                    textAlign: 'left',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '16px'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flex: 1 }}>
-                    <div style={{
-                      width: '34px',
-                      height: '34px',
-                      borderRadius: '10px',
-                      background: isOpen ? 'var(--primary-gradient)' : 'rgba(255, 255, 255, 0.06)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0,
-                      transition: 'all 0.2s ease'
-                    }}>
-                      <IconComponent size={16} color="#fff" />
-                    </div>
-
-                    <div>
-                      <span style={{
-                        fontSize: '0.72rem',
-                        fontWeight: 700,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.05em',
-                        color: isOpen ? '#c084fc' : 'var(--text-dim)',
-                        display: 'block',
-                        marginBottom: '2px'
-                      }}>
-                        {faq.category}
-                      </span>
-                      <h3 style={{ fontSize: '1rem', fontWeight: 700, color: isOpen ? '#38bdf8' : '#e2e8f0' }}>
-                        {faq.q}
-                      </h3>
-                    </div>
-                  </div>
-
-                  <div style={{
-                    transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-                    transition: 'transform 0.25s ease',
-                    color: isOpen ? '#a855f7' : 'var(--text-muted)'
-                  }}>
-                    <ChevronDown size={20} />
-                  </div>
+              <div className={`faq-item ${isOpen ? 'is-open' : ''}`} key={question}>
+                <button type="button" onClick={() => setOpenIndex(isOpen ? null : index)}>
+                  <span className="faq-question">
+                    <span className="faq-icon"><Icon size={16} /></span>
+                    <span>{question}</span>
+                  </span>
+                  <ChevronDown size={18} />
                 </button>
-
-                {/* Collapsible Content Body */}
-                {isOpen && (
-                  <div style={{
-                    padding: '0 22px 20px 70px',
-                    fontSize: '0.9rem',
-                    color: 'var(--text-muted)',
-                    lineHeight: 1.65,
-                    borderTop: '1px solid rgba(255, 255, 255, 0.05)',
-                    paddingTop: '14px',
-                    animation: 'fadeIn 0.25s ease'
-                  }}>
-                    {faq.a}
-                  </div>
-                )}
+                {isOpen && <p>{answer}</p>}
               </div>
             );
           })}

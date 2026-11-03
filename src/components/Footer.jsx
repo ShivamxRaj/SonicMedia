@@ -1,5 +1,6 @@
 import React from 'react';
-import { Music, ShieldCheck, FileText, ShieldAlert } from 'lucide-react';
+import { ShieldCheck, FileText, ShieldAlert } from 'lucide-react';
+import SonicLogo from './SonicLogo';
 
 export default function Footer({ onOpenTerms, onOpenPrivacy, onOpenDmca }) {
   return (
@@ -22,18 +23,16 @@ export default function Footer({ onOpenTerms, onOpenPrivacy, onOpenDmca }) {
         {/* Brand */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '0 auto 0 0' }}>
           <div style={{
-            width: '28px',
-            height: '28px',
-            borderRadius: '8px',
-            background: 'var(--primary-gradient)',
+            width: '30px',
+            height: '30px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center'
           }}>
-            <Music size={15} color="#fff" />
+            <SonicLogo size={30} />
           </div>
           <span style={{ fontSize: '1.05rem', fontWeight: 800, color: '#fff' }}>
-            Sonic<span className="text-gradient">Media</span> Studio
+             Sonic<span className="text-gradient">Media</span>
           </span>
         </div>
 

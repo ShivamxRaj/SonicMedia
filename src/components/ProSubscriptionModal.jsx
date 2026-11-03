@@ -153,7 +153,7 @@ export default function ProSubscriptionModal({ isOpen, onClose, isPro, onActivat
           }}>
             <Sparkles size={20} color="#fff" />
           </div>
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 800, fontFamily: 'Outfit, sans-serif' }}>
+           <h2 style={{ fontSize: '1.25rem', fontWeight: 800, fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
             Sonic<span className="text-gradient">PRO</span> Studio Pass
           </h2>
           

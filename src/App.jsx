@@ -326,7 +326,6 @@ export default function App() {
           onAnalyze={handleAnalyze}
           loading={loading}
           error={error}
-          onOpenBatchModal={() => setIsBatchModalOpen(true)}
         />
 
         <MediaCard

@@ -73,7 +73,7 @@ export default function DownloadHistory({ history, onClearHistory, onReDownload 
                 justifyContent: 'center',
                 flexShrink: 0
               }}>
-                {item.type === 'audio' ? <Music size={20} color="#8b5cf6" /> : <Video size={20} color="#06b6d4" />}
+                 {item.type === 'audio' ? <Music size={20} color="#a78bfa" /> : <Video size={20} color="#a78bfa" />}
               </div>
 
               <div style={{ flex: 1, minWidth: 0 }}>

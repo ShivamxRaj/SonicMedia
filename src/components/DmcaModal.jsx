@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, ShieldAlert, Mail, Check } from 'lucide-react';
+import { Check, ChevronRight, Mail, ShieldAlert, X } from 'lucide-react';
 
 export default function DmcaModal({ isOpen, onClose }) {
   if (!isOpen) return null;
@@ -7,158 +7,82 @@ export default function DmcaModal({ isOpen, onClose }) {
   const sections = [
     {
       id: '01',
-      title: 'Copyright Respect Policy',
-      content: 'SonicMedia Studio respects the intellectual property rights of content creators. SonicMedia Studio does not host, stream-store, or index video/audio files on its servers. All extraction is done dynamically on user request.'
+      title: 'What SonicMedia Provides',
+      content: 'SonicMedia is a user-directed conversion tool. We do not host, index, or permanently store audio or video files. Processing begins only when a user submits a link and is handled in real time.'
     },
     {
       id: '02',
-      title: 'DMCA Takedown Notice Procedure',
-      content: 'If you are a copyright owner or designated agent and believe content accessible via our platform infringes your copyright, please send a written takedown notice specifying the exact URL, copyrighted work details, and ownership proof.'
+      title: 'Your Responsibility',
+      content: 'Only download content you own, have permission to use, or are legally allowed to save. Users are responsible for respecting copyright, intellectual property rights, and the terms of the source platform.'
     },
     {
       id: '03',
-      title: 'Designated Legal Agent Contact',
-      content: 'Official copyright takedown requests should be submitted directly to our legal team at: support@sonicmedia.me. Valid requests are reviewed and processed within 24–48 business hours.'
+      title: 'Submitting a Takedown Request',
+      content: 'Copyright owners or authorised representatives may contact us with the exact source URL, details of the copyrighted work, proof of ownership, a good-faith statement, and valid contact information so the request can be reviewed.'
+    },
+    {
+      id: '04',
+      title: 'Review & Response',
+      content: 'Complete and credible notices are reviewed by our team. Where appropriate, we may restrict access to the requested conversion route while the matter is assessed. Send official notices to support@sonicmedia.me.'
     }
   ];
 
   return (
-    <div style={{
-      position: 'fixed',
-      inset: 0,
-      background: 'rgba(3, 5, 12, 0.82)',
-      backdropFilter: 'blur(20px)',
-      WebkitBackdropFilter: 'blur(20px)',
-      zIndex: 100,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '12px'
-    }}>
-      <div style={{
-        maxWidth: '680px',
-        width: '100%',
-        background: 'linear-gradient(180deg, #111526 0%, #0a0d18 100%)',
-        border: '1px solid rgba(255, 255, 255, 0.12)',
-        borderRadius: '20px',
-        boxShadow: '0 25px 70px rgba(0, 0, 0, 0.9), 0 0 40px rgba(244, 63, 94, 0.12)',
-        padding: '20px 18px',
-        position: 'relative',
-        maxHeight: '90vh',
-        display: 'flex',
-        flexDirection: 'column'
-      }}>
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '16px', gap: '12px' }}>
-          <div>
-            <div style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '3px 10px',
-              borderRadius: '20px',
-              background: 'rgba(244, 63, 94, 0.15)',
-              border: '1px solid rgba(244, 63, 94, 0.3)',
-              color: '#f43f5e',
-              fontSize: '0.7rem',
-              fontWeight: 700,
-              letterSpacing: '0.05em',
-              textTransform: 'uppercase',
-              marginBottom: '8px'
-            }}>
-              <ShieldAlert size={12} />
-              <span>Copyright Notice</span>
+    <div className="terms-overlay dmca-overlay" role="dialog" aria-modal="true" aria-labelledby="dmca-title">
+      <div className="terms-modal dmca-modal">
+        <header className="terms-header">
+          <div className="terms-heading-group">
+            <div className="terms-icon"><ShieldAlert size={22} /></div>
+            <div>
+              <span className="terms-overline">SonicMedia / Copyright</span>
+              <h2 id="dmca-title">DMCA Disclaimer</h2>
+              <p>A clear process for protecting creative work.</p>
             </div>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fff', margin: 0, letterSpacing: '-0.02em' }}>
-              DMCA Disclaimer
-            </h3>
-            <p style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '2px', margin: 0 }}>
-              Copyright Compliance & Takedowns
-            </p>
           </div>
 
-          <button
-            onClick={onClose}
-            style={{
-              background: 'rgba(255, 255, 255, 0.06)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              color: '#cbd5e1',
-              width: '32px',
-              height: '32px',
-              borderRadius: '50%',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0
-            }}
-          >
-            <X size={16} />
+          <button className="terms-close" onClick={onClose} aria-label="Close DMCA disclaimer">
+            <X size={18} />
           </button>
+        </header>
+
+        <div className="terms-meta">
+          <span><span className="terms-status-dot" />Copyright guidance</span>
+          <span>sonicmedia.me</span>
         </div>
 
-        {/* Scrollable Clause Cards */}
-        <div style={{
-          overflowY: 'auto',
-          paddingRight: '4px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '10px',
-          flex: 1
-        }}>
-          {sections.map((item) => (
-            <div
-              key={item.id}
-              style={{
-                background: 'rgba(255, 255, 255, 0.03)',
-                border: '1px solid rgba(255, 255, 255, 0.06)',
-                borderLeft: '3px solid #f43f5e',
-                borderRadius: '12px',
-                padding: '12px 14px'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                <span style={{ fontSize: '0.7rem', fontWeight: 800, color: '#f43f5e' }}>{item.id}</span>
-                <h4 style={{ fontSize: '0.9rem', fontWeight: 700, color: '#f8fafc', margin: 0 }}>{item.title}</h4>
-              </div>
-              <p style={{ fontSize: '0.82rem', color: '#94a3b8', lineHeight: 1.5, margin: 0 }}>
-                {item.content}
-              </p>
-            </div>
-          ))}
+        <div className="terms-scroll">
+          <div className="terms-intro">
+            <strong>Respect the people behind the content.</strong>
+            <span>SonicMedia supports responsible personal use and provides a direct channel for copyright owners to raise concerns.</span>
+          </div>
+
+          <div className="terms-clause-list">
+            {sections.map((item) => (
+              <article className="terms-clause" key={item.id}>
+                <div className="terms-clause-number">{item.id}</div>
+                <div>
+                  <h3>{item.title}</h3>
+                  <p>{item.content}</p>
+                </div>
+                <ChevronRight className="terms-clause-arrow" size={16} />
+              </article>
+            ))}
+          </div>
         </div>
 
-        {/* Responsive Footer Bar */}
-        <div style={{
-          marginTop: '16px',
-          paddingTop: '12px',
-          borderTop: '1px solid rgba(255, 255, 255, 0.08)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: '10px'
-        }}>
-          <span style={{ fontSize: '0.75rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <Mail size={13} color="#f43f5e" />
-            <span>support@sonicmedia.me</span>
-          </span>
-
-          <button
-            onClick={onClose}
-            className="btn-primary"
-            style={{
-              padding: '8px 18px',
-              fontSize: '0.82rem',
-              borderRadius: '10px',
-              flex: '1 1 auto',
-              justifyContent: 'center'
-            }}
+        <footer className="terms-footer">
+          <a
+            className="dmca-contact"
+            href="mailto:support@sonicmedia.me?subject=DMCA%20Support%20Request"
           >
-            <Check size={15} />
+            <Mail size={14} />
+            <span>support@sonicmedia.me</span>
+          </a>
+          <button className="btn-primary terms-accept" onClick={onClose}>
+            <Check size={16} />
             <span>Close Disclaimer</span>
           </button>
-        </div>
+        </footer>
       </div>
     </div>
   );
