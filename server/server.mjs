@@ -592,9 +592,14 @@ pollTelegramUpdates();
 // useProxy=true: metadata/info fetching uses proxy rotation to bypass Azure datacenter rate-limits
 function runYtDlp(args, callback) {
   const commands = getCommands(true); // Info fetching uses proxy
+  const isMetadataRequest = args.includes('--dump-single-json');
+  const commandTimeoutMs = isMetadataRequest ? 10000 : 30000;
+  // Metadata has a reliable noembed fallback, so do not let every proxy/client
+  // combination make a user wait indefinitely before reaching it.
+  const maxAttempts = isMetadataRequest ? Math.min(commands.length, 4) : commands.length;
 
   function tryCommand(index) {
-    if (index >= commands.length) {
+    if (index >= maxAttempts) {
       return callback(1, '', 'All yt-dlp execution strategies failed');
     }
 
@@ -613,10 +618,18 @@ function runYtDlp(args, callback) {
 
     let stdoutData = '';
     let stderrData = '';
+    const timeoutHandle = setTimeout(() => {
+      if (handled) return;
+      handled = true;
+      console.error(`[runYtDlp ${label}] timed out after ${commandTimeoutMs}ms`);
+      try { py.kill(); } catch (e) {}
+      tryCommand(index + 1);
+    }, commandTimeoutMs);
 
     py.on('error', (err) => {
       if (!handled) {
         handled = true;
+        clearTimeout(timeoutHandle);
         console.error(`[runYtDlp ${label}] process error:`, err.message);
         tryCommand(index + 1);
       }
@@ -627,6 +640,7 @@ function runYtDlp(args, callback) {
 
     py.on('close', (code) => {
       if (handled) return;
+      clearTimeout(timeoutHandle);
       if (code === 0 && stdoutData) {
         handled = true;
         return callback(0, stdoutData, stderrData);
@@ -771,51 +785,68 @@ function formatDuration(sec, fallbackStr = '') {
 // Fetch YouTube metadata via noembed.com fallback API if 429
 async function fetchNoembedFallback(cleanUrl, platform, res) {
   const apiUrl = `https://noembed.com/embed?url=${encodeURIComponent(cleanUrl)}`;
+  let responseFinished = false;
+  const sendResponse = (status, payload) => {
+    if (responseFinished || res.headersSent) return;
+    responseFinished = true;
+    return res.status(status).json(payload);
+  };
 
-  // Retrieve actual video duration in parallel from YouTube page
-  const pageDurationSec = await getYouTubeDurationFromPage(cleanUrl);
+  // Duration enrichment must never block the reliable title/thumbnail fallback.
+  const pageDurationPromise = getYouTubeDurationFromPage(cleanUrl).catch(() => 0);
+  const durationTimeout = new Promise(resolve => setTimeout(() => resolve(0), 3500));
 
-  https.get(apiUrl, (apiRes) => {
+  const apiReq = https.get(apiUrl, (apiRes) => {
     let data = '';
     apiRes.on('data', chunk => data += chunk);
     apiRes.on('end', () => {
+      if (responseFinished) return;
       try {
         const json = JSON.parse(data);
         if (json.title) {
           const fallbackAudioUrl = `/api/download?url=${encodeURIComponent(cleanUrl)}&type=audio&quality=320k&title=${encodeURIComponent(json.title)}`;
           const fallbackVideoUrl = `/api/download?url=${encodeURIComponent(cleanUrl)}&type=video&quality=1080p&title=${encodeURIComponent(json.title)}`;
-          const finalDuration = pageDurationSec > 0 ? formatDuration(pageDurationSec) : '0:00';
+          return Promise.race([pageDurationPromise, durationTimeout]).then((pageDurationSec) => {
+            const finalDuration = pageDurationSec > 0 ? formatDuration(pageDurationSec) : '0:00';
 
-          return res.json({
-            title: json.title,
-            uploader: json.author_name || 'YouTube Author',
-            duration: finalDuration,
-            duration_seconds: pageDurationSec || 0,
-            thumbnail: json.thumbnail_url || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=800&q=80',
-            platform,
-            url: cleanUrl,
-            views: 'Verified Stream',
-            formats: {
-              audio: [
-                { label: 'MP3 Ultra HD (320 kbps)', bitrate: '320k', size: '~8.5 MB', format_id: 'mp3-320', download_url: fallbackAudioUrl },
-                { label: 'MP3 High Quality (256 kbps)', bitrate: '256k', size: '~6.2 MB', format_id: 'mp3-256', download_url: fallbackAudioUrl },
-                { label: 'MP3 Standard (128 kbps)', bitrate: '128k', size: '~3.4 MB', format_id: 'mp3-128', download_url: fallbackAudioUrl },
-                { label: 'M4A Original Stream', bitrate: 'm4a', size: '~5.1 MB', format_id: 'mp3-128', download_url: fallbackAudioUrl }
-              ],
-              video: [
-                { label: 'MP4 4K Ultra HD (HDR Color Grade + Crisp Edge)', res: '2160p', size: '~120 MB', format_id: 'mp4-4k', download_url: fallbackVideoUrl },
-                { label: 'MP4 Full HD (1080p + Audio)', res: '1080p', size: '~45 MB', format_id: 'mp4-1080', download_url: fallbackVideoUrl },
-                { label: 'MP4 HD (720p + Audio)', res: '720p', size: '~22 MB', format_id: 'mp4-720', download_url: fallbackVideoUrl },
-                { label: 'MP4 SD (480p + Audio)', res: '480p', size: '~12 MB', format_id: 'mp4-480', download_url: fallbackVideoUrl }
-              ]
-            }
-          });
+              return sendResponse(200, {
+                title: json.title,
+                uploader: json.author_name || 'YouTube Author',
+                duration: finalDuration,
+                duration_seconds: pageDurationSec || 0,
+                thumbnail: json.thumbnail_url || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=800&q=80',
+                platform,
+                url: cleanUrl,
+                views: 'Verified Stream',
+                formats: {
+                  audio: [
+                    { label: 'MP3 Ultra HD (320 kbps)', bitrate: '320k', size: '~8.5 MB', format_id: 'mp3-320', download_url: fallbackAudioUrl },
+                    { label: 'MP3 High Quality (256 kbps)', bitrate: '256k', size: '~6.2 MB', format_id: 'mp3-256', download_url: fallbackAudioUrl },
+                    { label: 'MP3 Standard (128 kbps)', bitrate: '128k', size: '~3.4 MB', format_id: 'mp3-128', download_url: fallbackAudioUrl },
+                    { label: 'M4A Original Stream', bitrate: 'm4a', size: '~5.1 MB', format_id: 'mp3-128', download_url: fallbackAudioUrl }
+                  ],
+                  video: [
+                    { label: 'MP4 4K Ultra HD (HDR Color Grade + Crisp Edge)', res: '2160p', size: '~120 MB', format_id: 'mp4-4k', download_url: fallbackVideoUrl },
+                    { label: 'MP4 Full HD (1080p + Audio)', res: '1080p', size: '~45 MB', format_id: 'mp4-1080', download_url: fallbackVideoUrl },
+                    { label: 'MP4 HD (720p + Audio)', res: '720p', size: '~22 MB', format_id: 'mp4-720', download_url: fallbackVideoUrl },
+                    { label: 'MP4 SD (480p + Audio)', res: '480p', size: '~12 MB', format_id: 'mp4-480', download_url: fallbackVideoUrl }
+                  ]
+                }
+              });
+            });
         }
       } catch (e) {}
-      return res.status(400).json({ error: '⚠️ Could not read video link. Please check the URL and try again.' });
+      return sendResponse(400, { error: '⚠️ Could not read video link. Please check the URL and try again.' });
     });
-  }).on('error', () => {
-    return res.status(400).json({ error: '⚠️ Could not read video link. Please check the URL and try again.' });
+  });
+
+  apiReq.setTimeout(8000, () => {
+    apiReq.destroy();
+    return sendResponse(504, { error: '⚠️ Media service timed out. Please try again.' });
+  });
+
+  apiReq.on('error', () => {
+    return sendResponse(400, { error: '⚠️ Could not read video link. Please check the URL and try again.' });
   });
 }
 
