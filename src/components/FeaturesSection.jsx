@@ -56,7 +56,7 @@ export default function FeaturesSection() {
   return (
     <section className="features-page-section">
       <div className="section-heading features-section-heading">
-        <h2>Everything you need. <span className="text-gradient">Nothing you don’t.</span></h2>
+        <h2>Powerful tools for perfect media conversions</h2>
         <p>Simple tools, polished output, and a workflow that stays out of your way.</p>
       </div>
 
